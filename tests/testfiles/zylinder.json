@@ -1,0 +1,12 @@
+{
+  "num_solids": 1,
+  "num_components": 1,
+  "num_faces": 3,
+
+  "faces": [
+    {"type":  "cylinderface", "radius":  11, "mainaxis":  [0,1,0]}
+  ],
+
+  "unit": "mm"
+
+}

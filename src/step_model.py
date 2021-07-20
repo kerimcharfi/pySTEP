@@ -1,22 +1,29 @@
 import re
 from .step_entitiys import *
+import pathlib
+import typing
+
+DEBUG = False
+
 
 class Model:
 
-    def __init__(self, doc, FILENAME):
+    def __init__(self, file_path: typing.Union[str, pathlib.Path] = None, document: str = ""):
 
-        ## Programmverlauf steuernde FLAGS
-        self.prints = 0
-        ## Ein
+        if document == "" and file_path is None:
+            raise Exception("No step file provided")
+
+        if document == "":
+            with open(file_path) as f:
+                document = f.read()
+
+        self.file_path = file_path
+
         self.components = []
-
-        self.FILENAME = FILENAME
-        self.DEBUG = False
-        self.BASE_FILENAME = FILENAME[:-5]
         self.entitys = []
 
         self.idcounter = 0
-        blocks = re.findall(r'([\S\s]+?);', doc)
+        blocks = re.findall(r'([\S\s]+?);', document)
 
         for b in blocks:
             data = re.findall('(\-*\w+\.\d*\w*\-*\+*\d*)', b)  ##Changed to get T. and F.
@@ -57,7 +64,6 @@ class Model:
             if len(self.entitys) > 0:
                 self.entitys[len(self.entitys) - 1].block = b
 
-
         self.idoffset = int(self.entitys[0].getID())
 
         for e in self.entitys:
@@ -65,7 +71,7 @@ class Model:
                 if pidstring != "NONE":
                     e.appendparent(int(pidstring))
                     self.getEntityByID(int(pidstring)).appendchild(e.getID())
-                    #self.getEntityByID(int(pidstring)).appendchild(e) #directlink
+                    # self.getEntityByID(int(pidstring)).appendchild(e) #directlink
 
         for i in range(0, len(self.entitys)):
 
@@ -75,7 +81,7 @@ class Model:
 
                 elif self.entitys[i].getParents()[len(self.entitys[i].getParents()) - 1].getName() == "CYLINDRICAL_SURFACE":
                     self.entitys[i] = CylindricalFace(self.entitys[i], self)
-                    #self.entitys[i].component.cylindersfaces.append(self.entitys[i]) Not sure if this should be here or in Component.complete__init__()
+                    # self.entitys[i].component.cylindersfaces.append(self.entitys[i]) Not sure if this should be here or in Component.complete__init__()
 
             elif self.entitys[i].getName() == "EDGE_CURVE" and self.entitys[i].getParents()[2].getName() == "LINE":
 
@@ -100,22 +106,19 @@ class Model:
         for component in self.components:
             component.complete__init__()
 
-    def getList(self):
-        return self.entitys
-
-    def getEntityByID(self, entiid):
-        if entiid - int(self.entitys[0].getID()) < len(self.entitys):
-            return self.entitys[entiid - self.idoffset]
+    def get_entity_by_id(self, entity_id):
+        if entity_id - int(self.entitys[0].getID()) < len(self.entitys):
+            return self.entitys[entity_id - self.idoffset]
         else:
             return None
 
-    def getEntitysByIDs(self, entiids):
+    def get_entitys_by_ids(self, entiids):
         entitys = []
         for entiid in entiids:
             entitys.append(self.entitys[entiid - self.idoffset])
         return entitys
 
-    def overrideentity(self, entity):
+    def override_entity(self, entity):
         self.entitys[entity.id - self.idoffset] = entity
         return entity.id
 
@@ -123,20 +126,20 @@ class Model:
         self.idcounter += 1
         return self.idcounter
 
-    def addentity(self, entity, component):
+    def add_entity(self, entity, component):
         entity.id = self.get_new_id()
         self.entitys.append(entity)
         if isinstance(entity, Edge):
             print("new edge created")
             component.edges.append(entity)
 
-    def getEntitysByName(self, name):
+    def get_entitys_by_name(self, name):
         namelist = []
         for e in self.entitys:
             if str(name) == str(e.getName()):
                 namelist.append(e)
         return namelist
 
-    def printList(self):
-        for e in self.entitys:
-            print(e)
+    def save(self):
+        raise Exception("save is not implemented yet")
+        pass
