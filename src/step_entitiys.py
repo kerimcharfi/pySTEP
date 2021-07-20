@@ -1,5 +1,5 @@
-from lib.vectors import Vec
-from lib.vectors.primitives import Gerade, Ebene
+from vectors import Vec
+from vectors.primitives import Gerade, Ebene
 
 class Entity:
 

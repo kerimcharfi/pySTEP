@@ -5,6 +5,7 @@ import typing
 
 DEBUG = False
 
+
 class Model:
 
     def __init__(self, file_path: typing.Union[str, pathlib.Path] = None, document: str = ""):
