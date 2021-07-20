@@ -4,8 +4,9 @@ from src.step_model import Model
 
 class TestCase(unittest.TestCase):
     def test_parsing(self):
-        Model("test")
-        self.assertEqual(True, False)
+        model = Model("testfiles/zylinder.step")
+        print(model)
+
 
     def test_faces(self):
         pass

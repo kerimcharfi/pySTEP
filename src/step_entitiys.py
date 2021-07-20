@@ -1,11 +1,12 @@
-from lib.vektormathe.vektormathe import *
+from lib.vectors import Vec
+from lib.vectors.primitives import Gerade, Ebene
 
 class Entity:
 
     # Initializer / Instance Attributes
     def __init__(self, id, name, parentsstring, data, modelinstance):
         self.autoinit = True  # set to false if entity ist artificially created. Blocks calls to linked ids in __init__ of subclasses if set to false
-        self.modelinstance = modelinstance  # type: 'Model'
+        self.modelinstance = modelinstance
         self.name = name
         self.id = int(id)
         self.parentsstring = parentsstring
@@ -68,13 +69,13 @@ class Entity:
     def getChildren(self):
         children = []
         for childid in self.children:
-            children.append(self.modelinstance.getEntityByID(childid))
+            children.append(self.modelinstance.get_entity_by_id(childid))
         return children
 
     def getParents(self, stelle=-1):
         parents = []
         for parentid in self.parents:
-            parents.append(self.modelinstance.getEntityByID(parentid))
+            parents.append(self.modelinstance.get_entity_by_id(parentid))
         if stelle >= 0:
             return parents[stelle]
         else:
@@ -98,7 +99,7 @@ class Component(Entity):
         self.surfacemesh = []
 
     def complete__init__(self):
-        self.parents_instances = self.modelinstance.getEntitysByIDs(self.parents)
+        self.parents_instances = self.modelinstance.get_entitys_by_ids(self.parents)
         for face in self.parents_instances:
             if isinstance(face, Face):
                 self.faces.append(face)
@@ -116,11 +117,11 @@ class Component(Entity):
                     self.cylinderfaces.append(face)
 
 
-class CartPoint(Vektor, Entity):
+class CartPoint(Vec, Entity):
 
     def __init__(self, id, name, parentsstring, data, modelinstance):
         Entity.__init__(self, id, name, parentsstring, data, modelinstance)
-        Vektor.__init__(self, koordinaten=data)
+        Vec.__init__(self, koordinaten=data)
         self.faces = []
 
     def appendface(self, face):
@@ -149,7 +150,7 @@ class Edgeloop(Entity):
             self.edges.append(edgecurve.getParents()[0].id)
 
     def getedges(self):
-        return self.modelinstance.getEntitysByIDs(self.edges)
+        return self.modelinstance.get_entitys_by_ids(self.edges)
 
 
 class Edge(Entity):
@@ -216,47 +217,35 @@ class ArcEdge(Edge):
 
     def __init__(self, entity, modelinstance):
         super().__init__(entity, modelinstance)
-        self.centeraxis = entity.getParents(2).getParents(0).getParents(1).id
+        self.centeraxis = entity.getParents(2).getParents(0).getParents(1)
         self.orientation = False
         if entity.getData() == "F":
             self.orientation = True  # entity is a oriented edge
-        self.startvertex = entity.getParents(0).getParents(0).id  # get vector ( of direction and length) orientededge/edgecurve/vertex/cart/data
+        self.startvertex = entity.getParents(0).getParents(0) # get vector ( of direction and length) orientededge/edgecurve/vertex/cart/data
         self.radius = float(entity.getParents(2).getData()[0])
-        self.endevertex = entity.getParents(1).getParents(0).id  # get Cart
+        self.endevertex = entity.getParents(1).getParents(0)  # get Cart
         self.carts = [entity.getParents(0).getParents(0), entity.getParents(1).getParents(0)]
-        self.base = entity.getParents(2).getParents(0).getParents(0).id  # circle/axisplacement/cart/data
+        self.base = entity.getParents(2).getParents(0).getParents(0)  # circle/axisplacement/cart/data
         self.tesselate(60)
-
-    def getcenteraxis(self):
-        return self.modelinstance.getEntityByID(self.centeraxis)
-
-    def getstartvertex(self):
-        return self.modelinstance.getEntityByID(self.startvertex)
-
-    def getendevertex(self):
-        return self.modelinstance.getEntityByID(self.endevertex)
-
-    def getbase(self):
-        return self.modelinstance.getEntityByID(self.base)
 
     def partof(self, line):
         pass
 
     def tesselate(self, resolution):
-        vektorstart = self.getstartvertex() - self.getbase()
-        vektorende = self.getendevertex() - self.getbase()
-        v = self.getendevertex() - self.getstartvertex()
-        if v == Vektor([0, 0, 0]):
+        vektorstart = self.startvertex - self.base
+        vektorende = self.endevertex - self.base
+        v = self.endevertex - self.startvertex
+        if v == Vec([0, 0, 0]):
             v = vektorstart * (-1)
-        halbierendervertex = v.cross(self.getcenteraxis()).norm() * self.radius + self.getbase()
-        vviertel1 = halbierendervertex - self.getstartvertex()
-        viertel1vertex = vviertel1.cross(self.getcenteraxis()).norm() * self.radius + self.getbase()
-        vviertel3 = self.getendevertex() - halbierendervertex
-        viertel3vertex = vviertel3.cross(self.getcenteraxis()).norm() * self.radius + self.getbase()
-        self.vertices = self.tesselatesmallarc(self.getbase(), self.getstartvertex(), viertel1vertex, self.radius, resolution) \
-                        + self.tesselatesmallarc(self.getbase(), viertel1vertex, halbierendervertex, self.radius, resolution) \
-                        + self.tesselatesmallarc(self.getbase(), halbierendervertex, viertel3vertex, self.radius, resolution) \
-                        + self.tesselatesmallarc(self.getbase(), viertel3vertex, self.getendevertex(), self.radius, resolution)
+        halbierendervertex = v.cross(self.centeraxis).norm() * self.radius + self.base
+        vviertel1 = halbierendervertex - self.startvertex
+        viertel1vertex = vviertel1.cross(self.centeraxis).norm() * self.radius + self.base
+        vviertel3 = self.endevertex - halbierendervertex
+        viertel3vertex = vviertel3.cross(self.centeraxis).norm() * self.radius + self.base
+        self.vertices = self.tesselatesmallarc(self.base, self.startvertex, viertel1vertex, self.radius, resolution) \
+                        + self.tesselatesmallarc(self.base, viertel1vertex, halbierendervertex, self.radius, resolution) \
+                        + self.tesselatesmallarc(self.base, halbierendervertex, viertel3vertex, self.radius, resolution) \
+                        + self.tesselatesmallarc(self.base, viertel3vertex, self.endevertex, self.radius, resolution)
 
     def tesselatesmallarc(self, base, startvertex, endevertex, radius, resolution):
         edges = []
@@ -422,7 +411,7 @@ class Face(Entity):  # advanced face
         self.connectingedge = None
         self.parents = entity.parents
         self.children = entity.children
-        self.outerbound = Modelinstance.overrideentity(Edgeloop(self.getParents()[0].getParents()[0], Modelinstance))  # outboundid
+        self.outerbound = Modelinstance.override_entity(Edgeloop(self.getParents()[0].getParents()[0], Modelinstance))  # outboundid
         self.innerbounds = []  # array of edgeloopids
         for innerbound in self.getParents()[1:-1]:
             innerboundid = Modelinstance.overrideentity(Edgeloop(innerbound.getParents()[0], Modelinstance))
@@ -432,7 +421,7 @@ class Face(Entity):  # advanced face
         self.neighbours = []
         self.connectingedges = []
 
-        self.component = Modelinstance.getEntityByID(self.children[0])  # type:Component
+        self.component = Modelinstance.get_entity_by_id(self.children[0])  # type:Component
 
         outerbound = self.getouterbound()
 
@@ -469,13 +458,13 @@ class Face(Entity):  # advanced face
         return neighbours
 
     def getedges(self):
-        return self.modelinstance.getEntitysByIDs(self.edges)
+        return self.modelinstance.get_entitys_by_ids(self.edges)
 
     def getouterbound(self):
-        return self.modelinstance.getEntityByID(self.outerbound)
+        return self.modelinstance.get_entity_by_id(self.outerbound)
 
     def getinnerbounds(self):
-        return self.modelinstance.getEntitysByIDs(self.innerbounds)
+        return self.modelinstance.get_entitys_by_ids(self.innerbounds)
 
     def area(self):
         pass
@@ -500,13 +489,13 @@ class PlaneFace(Face, Ebene):
         return "planeface: " + str(self.plane)
 
     def getplane(self):
-        return self.modelinstance.getEntityByID(self.plane)
+        return self.modelinstance.get_entity_by_id(self.plane)
 
     def getBase(self):
-        return self.modelinstance.getEntityByID(self.base)
+        return self.modelinstance.get_entity_by_id(self.base)
 
     def getunitvector(self):
-        return self.modelinstance.getEntityByID(self.normalenvektor)
+        return self.modelinstance.get_entity_by_id(self.normalenvektor)
 
     def tesselate(self, mode):
         if mode == "vertex":

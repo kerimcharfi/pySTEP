@@ -5,7 +5,6 @@ import typing
 
 DEBUG = False
 
-
 class Model:
 
     def __init__(self, file_path: typing.Union[str, pathlib.Path] = None, document: str = ""):
@@ -70,7 +69,7 @@ class Model:
             for pidstring in e.getParentsstring():
                 if pidstring != "NONE":
                     e.appendparent(int(pidstring))
-                    self.getEntityByID(int(pidstring)).appendchild(e.getID())
+                    self.get_entity_by_id(int(pidstring)).appendchild(e.getID())
                     # self.getEntityByID(int(pidstring)).appendchild(e) #directlink
 
         for i in range(0, len(self.entitys)):
@@ -96,7 +95,7 @@ class Model:
                 self.entitys[i] = EllipseEdge(self.entitys[i], self)
 
             elif self.entitys[i].getName() == "VECTOR":
-                data = (Vektor(self.entitys[i].getParents(0).getData()) * float(self.entitys[i].getData()[0])).koordinaten
+                data = (Vec(self.entitys[i].getParents(0).getData()) * float(self.entitys[i].getData()[0])).koordinaten
                 self.entitys[i] = CartPoint(self.entitys[i].id, self.entitys[i].name, self.entitys[i].parentsstring,
                                             data, self)
 
