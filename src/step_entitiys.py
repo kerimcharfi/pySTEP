@@ -9,15 +9,12 @@ class Entity:
         self.modelinstance = modelinstance
         self.name = name
         self.id = int(id)
-        self.parentsstring = parentsstring
         self.children = []
         self.parents = []
+        self.parentsstring = parentsstring
         self.modelledobject = None
         self.data = data
         self.mygroups = []
-
-    def appendparent(self, parent):
-        self.parents.append(parent)
 
     def getparentbyname(self, name, mode):
         result = []
@@ -45,6 +42,9 @@ class Entity:
     def __str__(self):
         return "id: " + str(self.id) + " Name: " + str(self.name) + " Parents: " + str(self.parentsstring)
 
+    def __repr__(self):
+        return "id: #" + str(self.id) + " Name: " + str(self.name)
+
     def getName(self):
         return self.name
 
@@ -53,12 +53,6 @@ class Entity:
 
     def getData(self):
         return self.data
-
-    def getParentsstring(self, stelle=-1):
-        if stelle >= 0:
-            return self.parentsstring[stelle]
-        else:
-            return self.parentsstring
 
     def getChildstring(self, stelle=-1):
         if stelle >= 0:
@@ -73,13 +67,10 @@ class Entity:
         return children
 
     def getParents(self, stelle=-1):
-        parents = []
-        for parentid in self.parents:
-            parents.append(self.modelinstance.get_entity_by_id(parentid))
         if stelle >= 0:
-            return parents[stelle]
+            return self.parents[stelle]
         else:
-            return parents
+            return self.parents
 
 
 class Component(Entity):
@@ -99,7 +90,6 @@ class Component(Entity):
         self.surfacemesh = []
 
     def complete__init__(self):
-        self.parents_instances = self.modelinstance.get_entitys_by_ids(self.parents)
         for face in self.parents_instances:
             if isinstance(face, Face):
                 self.faces.append(face)
@@ -116,12 +106,13 @@ class Component(Entity):
                 if isinstance(face, CylindricalFace):
                     self.cylinderfaces.append(face)
 
+import numpy as np
 
 class CartPoint(Vec, Entity):
 
-    def __init__(self, id, name, parentsstring, data, modelinstance):
-        Entity.__init__(self, id, name, parentsstring, data, modelinstance)
-        Vec.__init__(self, koordinaten=data)
+    def __init__(self, id, name, parentsstring, coords, modelinstance):
+        Entity.__init__(self, id, name, parentsstring, coords, modelinstance)
+        Vec.__init__(self, koordinaten=np.array(coords, dtype=float))
         self.faces = []
 
     def appendface(self, face):
@@ -165,8 +156,8 @@ class Edge(Entity):
         self.faces = []
 
         if entity.autoinit:
-            for edge_curv in entity.getChildren():
-                self.faces.append(edge_curv.getChildren()[0].getChildren()[0].getChildren()[0].id)
+            for edge_curv in entity.children:
+                self.faces.append(edge_curv.children[0].children[0].children[0])
 
     def __add__(self, other):
         if self.vertices[0] == other.vertices[0]:
@@ -217,15 +208,15 @@ class ArcEdge(Edge):
 
     def __init__(self, entity, modelinstance):
         super().__init__(entity, modelinstance)
-        self.centeraxis = entity.getParents(2).getParents(0).getParents(1)
+        self.centeraxis = entity.parents[2].parents[0].parents[1]
         self.orientation = False
         if entity.getData() == "F":
             self.orientation = True  # entity is a oriented edge
-        self.startvertex = entity.getParents(0).getParents(0) # get vector ( of direction and length) orientededge/edgecurve/vertex/cart/data
-        self.radius = float(entity.getParents(2).getData()[0])
-        self.endevertex = entity.getParents(1).getParents(0)  # get Cart
-        self.carts = [entity.getParents(0).getParents(0), entity.getParents(1).getParents(0)]
-        self.base = entity.getParents(2).getParents(0).getParents(0)  # circle/axisplacement/cart/data
+        self.startvertex = entity.parents[0].parents[0] # get vector ( of direction and length) orientededge/edgecurve/vertex/cart/data
+        self.radius = float(entity.parents[2].data[2])
+        self.endevertex = entity.parents[1].parents[0]  # get Cart
+        self.carts = [entity.parents[0].parents[0], entity.parents[1].parents[0]]
+        self.base = entity.parents[2].parents[0].parents[0]  # circle/axisplacement/cart/data
         self.tesselate(60)
 
     def partof(self, line):
@@ -357,6 +348,20 @@ class EllipseEdge(Edge):
         msp.add_polyline3d(points)
         self.centeraxis.draw_to_msp(msp)
 
+import trimesh.path.curve
+
+class SplineEdge(Edge):
+
+    def __init__(self, entity, modelinstance, controls):
+        super().__init__(entity, modelinstance)
+        self.knots = self.parents[2].parents
+        self.controls = controls
+
+
+    def discretize(self):
+        return trimesh.path.curve.discretize_bspline(self.knots, self.controls, 500)
+
+
 
 class Line(Edge, Gerade):
 
@@ -421,7 +426,7 @@ class Face(Entity):  # advanced face
         self.neighbours = []
         self.connectingedges = []
 
-        self.component = Modelinstance.get_entity_by_id(self.children[0])  # type:Component
+        self.component = self.children[0]  # type:Component
 
         outerbound = self.getouterbound()
 
@@ -544,7 +549,7 @@ class CylindricalFace(Face):
     def __init__(self, entity, Modelinstance):
         super().__init__(entity, Modelinstance)
         cylinder = self.getParents(1)  # cylinderform
-        self.radius = float(cylinder.getData()[0])
+        self.radius = float(cylinder.data[2])
         self.base = cylinder.getParents(0).getParents(0)
         mainaxis = cylinder.getParents(0).getParents(1)
         self.mainaxis = Gerade(self.base, mainaxis)
