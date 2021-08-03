@@ -1,20 +1,20 @@
 from vectors import Vec
 from vectors.primitives import Gerade, Ebene
 
-class Entity:
+class DOMElement:
 
     # Initializer / Instance Attributes
-    def __init__(self, id, name, parentsstring, data, modelinstance):
-        self.autoinit = True  # set to false if entity ist artificially created. Blocks calls to linked ids in __init__ of subclasses if set to false
-        self.modelinstance = modelinstance
+    def __init__(self, id, name, parent_ids, data):
+        self._parent_ids = parent_ids
+
         self.name = name
         self.id = int(id)
         self.children = []
         self.parents = []
-        self.parentsstring = parentsstring
-        self.modelledobject = None
         self.data = data
-        self.mygroups = []
+
+        self.entity = None
+
 
     def get_parent_by_name(self, name, mode):
         result = []
@@ -37,7 +37,31 @@ class Entity:
         return result
 
     def __str__(self):
-        return "id: " + str(self.id) + " Name: " + str(self.name) + " Parents: " + str(self.parentsstring)
+        return "id: " + str(self.id) + " Name: " + str(self.name) + " Parents: " + str(self._parent_ids)
+
+    def __repr__(self):
+        return "id: #" + str(self.id) + " Name: " + str(self.name)
+
+class Entity:
+
+    # Initializer / Instance Attributes
+    def __init__(self, dom_element: DOMElement):
+        self.dom_element: DOMElement = dom_element
+        dom_element.entity = self
+
+        self.modelledobject = None
+        self.mygroups = []
+
+    @property
+    def name(self):
+        return self.dom_element.name
+
+    @property
+    def id(self):
+        return self.dom_element.id
+
+    def __str__(self):
+        return "id: " + str(self.id) + " Name: " + str(self.name) + " Parents: " + str(self.dom_element._parent_ids)
 
     def __repr__(self):
         return "id: #" + str(self.id) + " Name: " + str(self.name)
@@ -49,8 +73,8 @@ class Solid:
 class Component(Entity):
 
 
-    def __init__(self, id, name, parentsstring, data, modelinstance):
-        Entity.__init__(self, id, name, parentsstring, data, modelinstance)
+    def __init__(self, dom_element):
+        Entity.__init__(self, dom_element)
 
         self.solid = None
         self.transformation = None
@@ -88,8 +112,9 @@ import numpy as np
 
 class CartPoint(Vec, Entity):
 
-    def __init__(self, id, name, parentsstring, coords, modelinstance):
-        Entity.__init__(self, id, name, parentsstring, coords, modelinstance)
+    def __init__(self, domelement):
+        Entity.__init__(self, domelement)
+        coords = domelement.data[1]
         Vec.__init__(self, koordinaten=np.array(coords, dtype=float))
         self.faces = []
 
@@ -97,22 +122,9 @@ class CartPoint(Vec, Entity):
         if face not in self.faces:
             self.faces.append(face)
 
-    def getfaces(self):
-        return self.modelinstance.getEntitysByIDs(self.faces)
-
-class VertexPoint(Vec, Entity):
-
-    def __init__(self, id, name, parentsstring, coords, modelinstance):
-        Entity.__init__(self, id, name, parentsstring, coords, modelinstance)
-        Vec.__init__(self, koordinaten=np.array(coords, dtype=float))
-
     @property
     def edges(self):
-        pass
-
-    @property
-    def faces(self):
-        pass
+        return [child for child in self.children if issubclass(type(child), Edge)]
 
 
 class Axis(Gerade, Entity):
@@ -128,12 +140,12 @@ class Edgeloop(Entity):
         super().__init__(entity.id, entity.name, entity.parentsstring, entity.data, modelinstance)
         self.parents = entity.parents
         self.children = entity.children
-        self.edges = []  # ids
+        self.edges = []
+        self.orientations = []
+
         for edgecurve in entity.parents:
             self.edges.append(edgecurve.parents[0].id)
 
-    def getedges(self):
-        return self.modelinstance.get_entitys_by_ids(self.edges)
 
 class Path:
     "multiple non closed, continous edges"
@@ -158,10 +170,10 @@ class Edge(Entity):
         self.parents = entity.parents
         self.children = entity.children
 
-        self.carts = []  # type:[CartPoint]
+        self.carts: [CartPoint] = [entity.parents[0], entity.parents[1]]
         self.faces = []
 
-        self._discretized = []  # type:[Vektor]
+        self._discretized: [Vec] = []
 
         if entity.autoinit:
             for edge_curv in entity.children:
@@ -176,7 +188,7 @@ class Edge(Entity):
             self.discretize()
         return self._discretized
 
-    def discretize(self):
+    def discretize(self, num_points=10):
         pass
 
     def length(self):
@@ -196,31 +208,31 @@ class ArcEdge(Edge):
         self.orientation = False
         if entity.data == "F":
             self.orientation = True  # entity is a oriented edge
-        self.startvertex = entity.parents[0].parents[0] # get vector ( of direction and length) orientededge/edgecurve/vertex/cart/data
+
         self.radius = float(entity.parents[2].data[2])
-        self.endevertex = entity.parents[1].parents[0]  # get Cart
-        self.carts = [entity.parents[0].parents[0], entity.parents[1].parents[0]]
         self.base = entity.parents[2].parents[0].parents[0]  # circle/axisplacement/cart/data
-        self.tesselate(60)
 
     def partof(self, line):
         pass
 
-    def tesselate(self, resolution):
-        vektorstart = self.startvertex - self.base
-        vektorende = self.endevertex - self.base
-        v = self.endevertex - self.startvertex
+    def discretize(self, num_points=40):
+        startvertex = self.carts[0]
+        endevertex = self.carts[1]
+
+        vektorstart = startvertex - self.base
+        vektorende = endevertex - self.base
+        v = endevertex - startvertex
         if v == Vec([0, 0, 0]):
             v = vektorstart * (-1)
         halbierendervertex = v.cross(self.centeraxis).norm() * self.radius + self.base
-        vviertel1 = halbierendervertex - self.startvertex
+        vviertel1 = halbierendervertex - startvertex
         viertel1vertex = vviertel1.cross(self.centeraxis).norm() * self.radius + self.base
-        vviertel3 = self.endevertex - halbierendervertex
+        vviertel3 = endevertex - halbierendervertex
         viertel3vertex = vviertel3.cross(self.centeraxis).norm() * self.radius + self.base
-        self.vertices = self.tesselatesmallarc(self.base, self.startvertex, viertel1vertex, self.radius, resolution) \
-                        + self.tesselatesmallarc(self.base, viertel1vertex, halbierendervertex, self.radius, resolution) \
-                        + self.tesselatesmallarc(self.base, halbierendervertex, viertel3vertex, self.radius, resolution) \
-                        + self.tesselatesmallarc(self.base, viertel3vertex, self.endevertex, self.radius, resolution)
+        self.vertices = self.tesselatesmallarc(self.base, startvertex, viertel1vertex, self.radius, num_points) \
+                        + self.tesselatesmallarc(self.base, viertel1vertex, halbierendervertex, self.radius, num_points) \
+                        + self.tesselatesmallarc(self.base, halbierendervertex, viertel3vertex, self.radius, num_points) \
+                        + self.tesselatesmallarc(self.base, viertel3vertex, endevertex, self.radius, num_points)
 
     def tesselatesmallarc(self, base, startvertex, endevertex, radius, resolution):
         edges = []
@@ -242,9 +254,6 @@ class ArcEdge(Edge):
 
     def getvertices(self):
         return self.vertices
-
-    def print(self):
-        print(self.start + self.ende)
 
 
 class EllipseEdge(Edge):
@@ -342,10 +351,8 @@ class SplineEdge(Edge):
         self.controls = controls
 
 
-    def discretize(self):
-        return trimesh.path.curve.discretize_bspline(self.knots, self.controls, 500)
-
-
+    def discretize(self, num_points= 500):
+        return trimesh.path.curve.discretize_bspline(self.knots, self.controls, num_points)
 
 class Line(Edge, Gerade):
 
@@ -355,9 +362,6 @@ class Line(Edge, Gerade):
         self.floatlength = 0
 
         if entity.autoinit:
-            for vertex in entity.parents[:-1]:
-                self.carts.append(vertex.parents[0])
-
             if len(self.carts) == 2:
                 self.richtung = self.carts[1] - self.carts[0]
                 self.floatlength = abs(self.richtung)

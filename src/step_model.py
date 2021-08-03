@@ -21,11 +21,13 @@ class Model:
 
         self.components = []
         self.entitys = []
+        self.DOM = []
 
         self.idcounter = 0
         blocks = re.findall(r'([\S\s]+?);', document)
         data_section = False
 
+        # parse text and create DOM elements
         for b in blocks:
 
             if not data_section and "DATA" in b:
@@ -71,112 +73,133 @@ class Model:
 
                 id_and_name_block = container_stack[0][0]
                 data = container_stack[0][-1]
+                all_ids_in_b = re.findall('#(\d+)', b)
 
-                ids = re.findall('#(\d+)', b)
-                if len(ids) > 1:
-                    id = int(ids.pop(0))
-                    parents = ids
+                if all_ids_in_b:
+                    id = int(all_ids_in_b.pop(0))
+                    parent_ids = [int(id_str) for id_str in all_ids_in_b]
                     name = re.findall(r'=(\w+)|$', id_and_name_block)[0]
-                    if id > self.idcounter:
-                        self.idcounter = id
-                    # re.search(r'=(\w+)', line)
-                    if name == "CARTESIAN_POINT":
-                        self.entitys.append(CartPoint(id, name, parents, data, self))
-                    elif name == "DIRECTION":
-                        self.entitys.append(CartPoint(id, name, parents, data, self))
-                    elif name == "CLOSED_SHELL":
-                        component = Component(id, name, parents, data, self)
-                        self.entitys.append(component)
-                        self.components.append(component)
-                    else:
-                        self.entitys.append(Entity(id, name, parents, data, self))
 
-                elif len(ids) > 0:
-                    id = int(ids.pop(0))
-                    parents = ['NONE']
-                    name = re.findall(r'=(\w+)|$', b)[0]
-                    if name == "CARTESIAN_POINT":
-                        coords = data[1]
-                        self.entitys.append(CartPoint(id, name, parents, coords, self))
-                    elif name == "DIRECTION":
-                        coords = data[1]
-                        self.entitys.append(CartPoint(id, name, parents, coords, self))
-                    elif name == "CLOSED_SHELL":
-                        component = Component(id, name, parents, data, self)
-                        self.entitys.append(component)
-                        self.components.append(component)
-                    else:
-                        self.entitys.append(Entity(id, name, parents, data, self))
-                if len(self.entitys) > 0:
-                    self.entitys[len(self.entitys) - 1].block = b
+                    self.DOM.append(DOMElement(id, name, parent_ids, data))
 
-        self.idoffset = int(self.entitys[0].id)
 
-        for e in self.entitys:
-            for pidstring in e.parentsstring:
-                if pidstring != "NONE":
-                    e.parents.append(self.get_entity_by_id(int(pidstring)))
-                    self.get_entity_by_id(int(pidstring)).children.append(e)
+        # if len(self.entitys) > 0:
+        #     self.entitys[len(self.entitys) - 1].block = b
 
-        for i in range(0, len(self.entitys)):
+        ### link DOM elements
+        self.idoffset = int(self.DOM[0].id)
 
-            if self.entitys[i].name == "ADVANCED_FACE":
-                if self.entitys[i].parents[len(self.entitys[i].parents) - 1].name == "PLANE":
-                    self.entitys[i] = PlaneFace(self.entitys[i], self)
+        for domelement in self.DOM:
+            for parent_id in domelement._parent_ids:
 
-                elif self.entitys[i].parents[len(self.entitys[i].parents) - 1].name == "CYLINDRICAL_SURFACE":
-                    self.entitys[i] = CylindricalFace(self.entitys[i], self)
+                domelement.parents.append(self.get_dom_elem_by_id(parent_id))
+                self.get_dom_elem_by_id(parent_id).children.append(domelement)
+
+        ### create entities
+        for domelement in self.DOM:
+
+            if domelement.name == "CARTESIAN_POINT":
+                self.entitys.append(CartPoint(domelement))
+            elif domelement.name == "DIRECTION":
+                self.entitys.append(CartPoint(domelement))
+
+            elif domelement.name == "CLOSED_SHELL":
+                component = Component(domelement)
+                self.entitys.append(component)
+                self.components.append(component)
+
+
+            elif domelement.name == "ADVANCED_FACE":
+                if domelement.parents[-1].name == "PLANE":
+                    self.entitys.append(PlaneFace(domelement))
+
+                elif domelement.parents[-1].name == "CYLINDRICAL_SURFACE":
+                    self.entitys.append(CylindricalFace(domelement))
                     # self.entitys[i].component.cylindersfaces.append(self.entitys[i]) Not sure if this should be here or in Component.complete__init__()
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "LINE":
+            elif domelement.name == "EDGE_CURVE":
 
-                self.entitys[i] = Line(self.entitys[i], self)
+                # #reparenting of substituted special_type
+                # newedge = self.entitys[i]
+                # id = newedge.id
+                # for parent in newedge.parents:
+                #     for i in range(len(parent.children)):
+                #         if parent.children[i].id == id:
+                #             parent.children[i] = newedge
+                #
+                # for child in newedge.children:
+                #     for i in range(len(child.parents)):
+                #         if child.parents[i].id == id:
+                #             child.parents[i] = newedge
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "CIRCLE":
+                if domelement.parents[2].name == "LINE":
 
-                self.entitys[i] = ArcEdge(self.entitys[i], self)
+                    self.entitys.append(Line(domelement))
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "ELLIPSE":
+                elif domelement.parents[2].name == "CIRCLE":
 
-                self.entitys[i] = EllipseEdge(self.entitys[i], self)
+                    self.entitys.append(ArcEdge(domelement))
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "B_SPLINE_CURVE_WITH_KNOTS":
-                entity = self.entitys[i].parents[2]
+                elif domelement.parents[2].name == "ELLIPSE":
 
-                control_raw = np.array(entity.data[7], dtype=float)
-                repeats = np.array(entity.data[6], dtype=int)
-                control = []
-                for c, rep in zip(control_raw, repeats):
-                    for xxxx in range(rep):
-                        control.append(c)
+                    self.entitys.append(EllipseEdge(domelement))
 
-                self.entitys[i] = SplineEdge( self.entitys[i], self, control)
+                elif domelement.parents[2].name == "B_SPLINE_CURVE_WITH_KNOTS":
+                    entity = domelement.parents[2]
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "":
-                data = self.entitys[i].parents[2].data
-                if data[2].strip() == "B_SPLINE_CURVE":
-                    control_raw = np.array(data[5][1], dtype=float)
-                    repeats = np.array(data[5][0], dtype=int)
+                    control_raw = np.array(entity.data[7], dtype=float)
+                    repeats = np.array(entity.data[6], dtype=int)
                     control = []
                     for c, rep in zip(control_raw, repeats):
                         for xxxx in range(rep):
                             control.append(c)
-                    self.entitys[i] = SplineEdge( self.entitys[i], self, control)
 
-            elif self.entitys[i].name == "VECTOR":
-                coords = (Vec(self.entitys[i].parents[0].koordinaten) * float(self.entitys[i].data[2])).koordinaten
-                self.entitys[i] = CartPoint(self.entitys[i].id, self.entitys[i].name, self.entitys[i].parentsstring,
-                                            coords, self)
+                    self.entitys.append(SplineEdge(domelement, control))
 
-            elif self.entitys[i].name== "VERTEX_POINT":
-                self.entitys[i].parents[0].children.append(self.entitys[i].children)
+                elif domelement.parents[2].name == "":
+                    data = domelement.parents[2].data
+                    if data[2].strip() == "B_SPLINE_CURVE":
+                        control_raw = np.array(data[5][1], dtype=float)
+                        repeats = np.array(data[5][0], dtype=int)
+                        control = []
+                        for c, rep in zip(control_raw, repeats):
+                            for xxxx in range(rep):
+                                control.append(c)
+                        self.entitys.append(SplineEdge( domelement, control))
 
+            elif domelement.name == "VECTOR":
+                coords = (Vec(domelement.parents[0].koordinaten) * float(domelement.data[2])).koordinaten
+                self.entitys.append(CartPoint(domelement))
+
+            elif domelement.name== "VERTEX_POINT":
+
+                vertex = domelement
+                cart = vertex.parents[0]
+
+                for child in vertex.children:
+                    i = child.parents.index(vertex)
+                    child.parents[i] = cart
+
+                cart.children.remove(vertex)
+                cart.children.extend(vertex.children)
+                self.entitys.append(cart)
+
+            else:
+                pass
+
+                #insert basic entity ? self.entitys.append(Entity(id, name, parents, data, self))
 
 
         for component in self.components:
             component.complete__init__()
 
         print("Model loaded")
+
+    def get_dom_elem_by_id(self, dom_elem_id):
+        if dom_elem_id - self.idoffset < len(self.DOM):
+            return self.DOM[dom_elem_id - self.idoffset]
+        else:
+            return None
 
     def get_entity_by_id(self, entity_id):
         if entity_id - int(self.entitys[0].id) < len(self.entitys):
