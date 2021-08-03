@@ -16,7 +16,7 @@ class Entity:
         self.data = data
         self.mygroups = []
 
-    def getparentbyname(self, name, mode):
+    def get_parent_by_name(self, name, mode):
         result = []
         if mode == "entity":
             for parent in self.parents:
@@ -29,15 +29,12 @@ class Entity:
 
         return result
 
-    def getchildrenbyname(self, name, mode):
+    def get_children_by_name(self, name, mode):
         result = []
         for child in self.children:
             if child.name == name:
                 result.append(child)
         return result
-
-    def appendchild(self, child):
-        self.children.append(child)
 
     def __str__(self):
         return "id: " + str(self.id) + " Name: " + str(self.name) + " Parents: " + str(self.parentsstring)
@@ -45,32 +42,8 @@ class Entity:
     def __repr__(self):
         return "id: #" + str(self.id) + " Name: " + str(self.name)
 
-    def getName(self):
-        return self.name
-
-    def getID(self):
-        return self.id
-
-    def getData(self):
-        return self.data
-
-    def getChildstring(self, stelle=-1):
-        if stelle >= 0:
-            return self.parentsstring[stelle]
-        else:
-            return self.parentsstring
-
-    def getChildren(self):
-        children = []
-        for childid in self.children:
-            children.append(self.modelinstance.get_entity_by_id(childid))
-        return children
-
-    def getParents(self, stelle=-1):
-        if stelle >= 0:
-            return self.parents[stelle]
-        else:
-            return self.parents
+class Solid:
+    pass
 
 
 class Component(Entity):
@@ -78,6 +51,11 @@ class Component(Entity):
 
     def __init__(self, id, name, parentsstring, data, modelinstance):
         Entity.__init__(self, id, name, parentsstring, data, modelinstance)
+
+        self.solid = None
+        self.transformation = None
+        self.sub_components = []
+        self.parent_component = None
 
         self.entitys = []
         self.faces = []
@@ -122,6 +100,20 @@ class CartPoint(Vec, Entity):
     def getfaces(self):
         return self.modelinstance.getEntitysByIDs(self.faces)
 
+class VertexPoint(Vec, Entity):
+
+    def __init__(self, id, name, parentsstring, coords, modelinstance):
+        Entity.__init__(self, id, name, parentsstring, coords, modelinstance)
+        Vec.__init__(self, koordinaten=np.array(coords, dtype=float))
+
+    @property
+    def edges(self):
+        pass
+
+    @property
+    def faces(self):
+        pass
+
 
 class Axis(Gerade, Entity):
 
@@ -137,27 +129,15 @@ class Edgeloop(Entity):
         self.parents = entity.parents
         self.children = entity.children
         self.edges = []  # ids
-        for edgecurve in entity.getParents():
-            self.edges.append(edgecurve.getParents()[0].id)
+        for edgecurve in entity.parents:
+            self.edges.append(edgecurve.parents[0].id)
 
     def getedges(self):
         return self.modelinstance.get_entitys_by_ids(self.edges)
 
-
-class Edge(Entity):
-
-    def __init__(self, entity, modelinstance):
-
-        super().__init__(entity.id, entity.name, entity.parentsstring, entity.data, modelinstance)
-        self.parents = entity.parents
-        self.children = entity.children
-        self.vertices = []  # type:[Vektor]
-        self.carts = []  # type:[CartPoint]
-        self.faces = []
-
-        if entity.autoinit:
-            for edge_curv in entity.children:
-                self.faces.append(edge_curv.children[0].children[0].children[0])
+class Path:
+    "multiple non closed, continous edges"
+    pass
 
     def __add__(self, other):
         if self.vertices[0] == other.vertices[0]:
@@ -170,38 +150,42 @@ class Edge(Entity):
             for vert in other.vertices:
                 self.vertices.append(vert)
 
+class Edge(Entity):
+
+    def __init__(self, entity, modelinstance):
+
+        super().__init__(entity.id, entity.name, entity.parentsstring, entity.data, modelinstance)
+        self.parents = entity.parents
+        self.children = entity.children
+
+        self.carts = []  # type:[CartPoint]
+        self.faces = []
+
+        self._discretized = []  # type:[Vektor]
+
+        if entity.autoinit:
+            for edge_curv in entity.children:
+                self.faces.append(edge_curv.children[0].children[0].children[0])
+
     def __str__(self):
-        return str(self.__class__) + " " + str(self.vertices)
+        return str(self.__class__) + " " + str(self.carts)
 
     @property
-    def approximation(self):
-        return self.vertices
+    def discretized(self):
+        if not self._discretized:
+            self.discretize()
+        return self._discretized
 
-    def approximate(self):
-        # remove if no consequences
-        return self.vertices
+    def discretize(self):
+        pass
 
     def length(self):
-        if self.vertices:
-            length = 0
-            oldvertice = self.vertices[0]
-            for vertice in self.vertices[1:]:
-                length += abs(oldvertice - vertice)
-                oldvertice = vertice
-            return round(length, 10)
-        else:
-            return 0
-
-    def getfaces(self):
-        return self.modelinstance.getEntitysByIDs(self.faces)
-
-    def write_to_2dmsp(self, msp):
-        points = [vektorr.getxy() for vektorr in self.vertices]
-        msp.add_lwpolyline(points)
-
-    def write_to_3dmsp(self, msp):
-        points = [vektorr.getxyz() for vektorr in self.vertices]
-        msp.add_polyline3d(points)
+        length = 0
+        oldvertice = self.discretized[0]
+        for vertice in self.discretized[1:]:
+            length += abs(oldvertice - vertice)
+            oldvertice = vertice
+        return round(length, 10)
 
 
 class ArcEdge(Edge):
@@ -210,7 +194,7 @@ class ArcEdge(Edge):
         super().__init__(entity, modelinstance)
         self.centeraxis = entity.parents[2].parents[0].parents[1]
         self.orientation = False
-        if entity.getData() == "F":
+        if entity.data == "F":
             self.orientation = True  # entity is a oriented edge
         self.startvertex = entity.parents[0].parents[0] # get vector ( of direction and length) orientededge/edgecurve/vertex/cart/data
         self.radius = float(entity.parents[2].data[2])
@@ -371,15 +355,13 @@ class Line(Edge, Gerade):
         self.floatlength = 0
 
         if entity.autoinit:
-            for vertex in entity.getParents()[:-1]:
-                self.vertices.append(vertex.getParents()[0])
+            for vertex in entity.parents[:-1]:
+                self.carts.append(vertex.parents[0])
 
-            if len(self.vertices) == 2:
-                self.richtung = self.vertices[1] - self.vertices[0]
+            if len(self.carts) == 2:
+                self.richtung = self.carts[1] - self.carts[0]
                 self.floatlength = abs(self.richtung)
-                Gerade.__init__(self, stutze=self.vertices[0], richtung=self.richtung)
-
-        self.carts = self.vertices
+                Gerade.__init__(self, stutze=self.carts[0], richtung=self.richtung)
 
     def equals(self, line):
         None
@@ -416,9 +398,9 @@ class Face(Entity):  # advanced face
         self.connectingedge = None
         self.parents = entity.parents
         self.children = entity.children
-        self.outerbound = Modelinstance.override_entity(Edgeloop(self.getParents()[0].getParents()[0], Modelinstance))  # outboundid
+        self.outerbound = Modelinstance.override_entity(Edgeloop(self.parents[0].parents[0], Modelinstance))  # outboundid
         self.innerbounds = []  # array of edgeloopids
-        for innerbound in self.getParents()[1:-1]:
+        for innerbound in self.parents[1:-1]:
             innerboundid = Modelinstance.overrideentity(Edgeloop(innerbound.getParents()[0], Modelinstance))
             self.innerbounds.append(innerboundid)
         self.edges = []
@@ -479,10 +461,10 @@ class PlaneFace(Face, Ebene):
     def __init__(self, entity, Modelinstance):
         Face.__init__(self, entity, Modelinstance)
 
-        self.plane = self.getParents()[len(self.parents) - 1].id
+        self.plane = self.parents[len(self.parents) - 1].id
 
-        plane = self.getplane().getParents()[0]
-        plane2 = plane.getParents()
+        plane = self.getplane().parents[0]
+        plane2 = plane.parents
         self.base = plane2[0].id
         normalenvektor = plane2[1]
         self.normalenvektor = normalenvektor.id
@@ -548,13 +530,13 @@ class PlaneFace(Face, Ebene):
 class CylindricalFace(Face):
     def __init__(self, entity, Modelinstance):
         super().__init__(entity, Modelinstance)
-        cylinder = self.getParents(1)  # cylinderform
+        cylinder = self.parents[1]  # cylinderform
         self.radius = float(cylinder.data[2])
-        self.base = cylinder.getParents(0).getParents(0)
-        mainaxis = cylinder.getParents(0).getParents(1)
+        self.base = cylinder.parents[0].parents[0]
+        mainaxis = cylinder.parents[0].parents[1]
         self.mainaxis = Gerade(self.base, mainaxis)
-        self.secondaxis = cylinder.getParents(0).getParents(2)
-        self.faceboundedges = self.getParents(0).getParents(0).getParents()
+        self.secondaxis = cylinder.parents[0].parents[2]
+        self.faceboundedges = self.parents[0].parents[0].parents
         self.areavalue = 0  # to do extract lines,  actually OUTDATED ? difference between getedges of super ?
 
     def __str__(self):

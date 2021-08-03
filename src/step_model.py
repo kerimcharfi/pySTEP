@@ -110,37 +110,37 @@ class Model:
                 if len(self.entitys) > 0:
                     self.entitys[len(self.entitys) - 1].block = b
 
-        self.idoffset = int(self.entitys[0].getID())
+        self.idoffset = int(self.entitys[0].id)
 
         for e in self.entitys:
             for pidstring in e.parentsstring:
                 if pidstring != "NONE":
                     e.parents.append(self.get_entity_by_id(int(pidstring)))
-                    self.get_entity_by_id(int(pidstring)).appendchild(e)
+                    self.get_entity_by_id(int(pidstring)).children.append(e)
 
         for i in range(0, len(self.entitys)):
 
             if self.entitys[i].name == "ADVANCED_FACE":
-                if self.entitys[i].parents[len(self.entitys[i].parents) - 1].getName() == "PLANE":
+                if self.entitys[i].parents[len(self.entitys[i].parents) - 1].name == "PLANE":
                     self.entitys[i] = PlaneFace(self.entitys[i], self)
 
-                elif self.entitys[i].parents[len(self.entitys[i].parents) - 1].getName() == "CYLINDRICAL_SURFACE":
+                elif self.entitys[i].parents[len(self.entitys[i].parents) - 1].name == "CYLINDRICAL_SURFACE":
                     self.entitys[i] = CylindricalFace(self.entitys[i], self)
                     # self.entitys[i].component.cylindersfaces.append(self.entitys[i]) Not sure if this should be here or in Component.complete__init__()
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].getName() == "LINE":
+            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "LINE":
 
                 self.entitys[i] = Line(self.entitys[i], self)
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].getName() == "CIRCLE":
+            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "CIRCLE":
 
                 self.entitys[i] = ArcEdge(self.entitys[i], self)
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].getName() == "ELLIPSE":
+            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "ELLIPSE":
 
                 self.entitys[i] = EllipseEdge(self.entitys[i], self)
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].getName() == "B_SPLINE_CURVE_WITH_KNOTS":
+            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "B_SPLINE_CURVE_WITH_KNOTS":
                 entity = self.entitys[i].parents[2]
 
                 control_raw = np.array(entity.data[7], dtype=float)
@@ -152,7 +152,7 @@ class Model:
 
                 self.entitys[i] = SplineEdge( self.entitys[i], self, control)
 
-            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].getName() == "":
+            elif self.entitys[i].name == "EDGE_CURVE" and self.entitys[i].parents[2].name == "":
                 data = self.entitys[i].parents[2].data
                 if data[2].strip() == "B_SPLINE_CURVE":
                     control_raw = np.array(data[5][1], dtype=float)
@@ -176,8 +176,10 @@ class Model:
         for component in self.components:
             component.complete__init__()
 
+        print("Model loaded")
+
     def get_entity_by_id(self, entity_id):
-        if entity_id - int(self.entitys[0].getID()) < len(self.entitys):
+        if entity_id - int(self.entitys[0].id) < len(self.entitys):
             return self.entitys[entity_id - self.idoffset]
         else:
             return None
