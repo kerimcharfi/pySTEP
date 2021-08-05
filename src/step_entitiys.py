@@ -60,6 +60,9 @@ class Entity:
     def id(self):
         return self.dom_element.id
 
+    def __hash__(self):
+        return hash(self.id)
+
     def __str__(self):
         return "id: " + str(self.id) + " Name: " + str(self.name) + " Parents: " + str(self.dom_element._parent_ids)
 
@@ -83,7 +86,11 @@ class Solid(Entity):
         return [face_dom.entity for face_dom in self.dom_element.parents]
 
     @property
-    def plane_faces(self):
+    def edges(self):
+        return list({edge for face in self.faces for edge in face.edges})
+
+    @property
+    def plane_faces(self) -> ["PlaneFace"]:
         return [face for face in self.faces if type(face) == PlaneFace]
 
 
@@ -158,6 +165,9 @@ class CartPoint(Vec, Entity):
         if face not in self.faces:
             self.faces.append(face)
 
+    def __hash__(self):
+        return hash(self.dom_element.id)
+
     @property
     def edges(self):
         return [child.entity for child in self.dom_element.children if issubclass(type(child.entity), Edge)]
@@ -211,6 +221,7 @@ class Edge(Entity):
 
     @property
     def carts(self):
+
         return [self.dom_element.parents[0].entity, self.dom_element.parents[1].entity]
 
     @property
@@ -225,11 +236,21 @@ class Edge(Entity):
     @property
     def discretized(self):
         if self._discretized is None:
-            self.discretize()
+            verts = self._discretize()
+
+            if abs(self.carts[0] - Vec(verts[0])) > abs(self.carts[1] - Vec(verts[0])):
+                verts.reverse()
+
+            verts[0] = self.carts[0]
+            verts[-1] = self.carts[1]
+
+            self._discretized = verts
+
         return self._discretized
 
-    def discretize(self, num_points=10):
-        self._discretized = self.carts
+    def _discretize(self):
+        return self.carts
+
 
     def length(self):
         length = 0
@@ -255,7 +276,7 @@ class ArcEdge(Edge):
     def partof(self, line):
         pass
 
-    def discretize(self, num_points=40):
+    def _discretize(self, num_points=3):
         startvertex = self.carts[0]
         endevertex = self.carts[1]
 
@@ -269,10 +290,12 @@ class ArcEdge(Edge):
         viertel1vertex = vviertel1.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
         vviertel3 = endevertex - halbierendervertex
         viertel3vertex = vviertel3.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
-        self._discretized = self.tesselatesmallarc(self.base_dom.entity, startvertex, viertel1vertex, self.radius, num_points) \
+
+        return self.tesselatesmallarc(self.base_dom.entity, startvertex, viertel1vertex, self.radius, num_points)[1:] \
                         + self.tesselatesmallarc(self.base_dom.entity, viertel1vertex, halbierendervertex, self.radius, num_points) \
                         + self.tesselatesmallarc(self.base_dom.entity, halbierendervertex, viertel3vertex, self.radius, num_points) \
                         + self.tesselatesmallarc(self.base_dom.entity, viertel3vertex, endevertex, self.radius, num_points)
+
 
     def tesselatesmallarc(self, base, startvertex, endevertex, radius, resolution):
         edges = []
@@ -291,9 +314,6 @@ class ArcEdge(Edge):
             vertices.append(naechsterpunkt)
             dieserpunkt = naechsterpunkt
         return vertices
-
-    def getvertices(self):
-        return self.vertices
 
 
 class EllipseEdge(Edge):
@@ -380,8 +400,9 @@ class SplineEdge(Edge):
     def knots(self):
         return [dom_knot.entity for dom_knot in self.knots_dom]
 
-    def discretize(self, num_points= 80):
-        self._discretized = trimesh.path.curve.discretize_bspline(self.knots, self.controls, num_points)
+    def _discretize(self, num_points= 80):
+        return list(trimesh.path.curve.discretize_bspline(self.knots, self.controls, num_points))
+
 
 class Line(Edge, Gerade):
 
@@ -454,7 +475,7 @@ class Face(Entity):  # advanced face
 
     @property
     def carts(self):
-        return [cart for edge in self.edges for cart in edge.carts]
+        return list({cart for edge in self.edges for cart in edge.carts})
 
     @property
     def outerbound(self):
@@ -478,6 +499,10 @@ class PlaneFace(Face, Ebene):
         self.normal_dom = plane2[1]
 
         Ebene.__init__(self, Vec(np.array(self.base_dom.data[1],dtype=float)), Vec(np.array(self.normal_dom.data[1],dtype=float)))
+
+    @property
+    def normal(self):
+        return self.normal_dom.entity
 
     def __str__(self):
         return "planeface: " + str(self.plane)
@@ -518,11 +543,6 @@ class PlaneFace(Face, Ebene):
             result.append(edgeverts)
 
         return result
-
-    def write_to_3dmsp(self, msp):
-        msp.add_polyline3d([self.getBase().getxyz(), (self.getBase() + self.nv_instance.norm(15)).getxyz()])
-        msp.add_circle((self.getBase() + self.nv_instance.norm(15)).getxyz(), 1)
-        msp.add_text(str(self.plane)).set_pos(self.getBase().getxyz())
 
 
 class CylindricalFace(Face):

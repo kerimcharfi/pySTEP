@@ -127,6 +127,8 @@ class Model:
                 elif domelement.parents[-1].name == "CYLINDRICAL_SURFACE":
                     self.entitys.append(CylindricalFace(domelement))
                     # self.entitys[i].component.cylindersfaces.append(self.entitys[i]) Not sure if this should be here or in Component.complete__init__()
+                else:
+                    self.entitys.append(Face(domelement))
 
             elif domelement.name == "EDGE_CURVE":
 
