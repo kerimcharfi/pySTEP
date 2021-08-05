@@ -178,6 +178,9 @@ class Model:
                                 control.append(c)
                         self.entitys.append(SplineEdge( domelement, control))
 
+            elif domelement.name == "EDGE_LOOP":
+                self.entitys.append(Edgeloop(domelement))
+
             elif domelement.name == "VECTOR":
                 coords = (Vec(np.array(domelement.parents[0].data[1], dtype=float)) * float(domelement.data[2])).koordinaten
                 self.entitys.append(CartPoint(domelement, coords))

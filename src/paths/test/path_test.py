@@ -45,8 +45,7 @@ def expand_path(edge):
 def find_profile(solid):
     profil_flachen = []
     for face in solid.plane_faces:
-
-        for vert in face.vertices:
+        for vert in face.carts:
             for edge in vert.edges:
                 if edge.direction[0].parallel(face.normi):
                     break

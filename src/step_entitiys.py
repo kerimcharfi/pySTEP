@@ -172,14 +172,13 @@ class Axis(Gerade, Entity):
 
 class Edgeloop(Entity):
 
-    def __init__(self, domelement):
-        super().__init__(domelement)
-        self.edges = []
+    def __init__(self, dom_element):
+        super().__init__(dom_element)
         self.orientations = []
 
-        #todo: remove
-        for edgecurve in domelement.parents:
-            self.edges.append(edgecurve.parents[0].id)
+    @property
+    def edges(self):
+        return [dom_el.parents[0].entity for dom_el in self.dom_element.parents]
 
 
 class Path:
@@ -411,11 +410,9 @@ class Face(Entity):  # advanced face
 
         self._edges = []
 
-        self.neighbours = []
+        self._neighbours = []
         self.connectingedges = []
 
-        # outerbound = self.getouterbound()
-        #
         # for edge in outerbound.getedges():
         #
         #     self.edges.append(edge.id)  ##serving dif context
@@ -439,7 +436,8 @@ class Face(Entity):  # advanced face
         #             if not faceid == self.id:
         #                 self.neighbours.append(faceid)
 
-    def getneighbours(self):
+    @property
+    def neighbours(self):
         neighbours = self.modelinstance.getEntitysByIDs(self.neighbours)
         connectingedges = self.modelinstance.getEntitysByIDs(self.connectingedges)
         for neighbour, connectingedge in zip(neighbours, connectingedges):
@@ -447,21 +445,24 @@ class Face(Entity):  # advanced face
         return neighbours
 
     @property
+    def edge_loops(self):
+        return [self.outerbound, *self.innerbounds]
+
+    @property
     def edges(self):
-        return self.modelinstance.get_entitys_by_ids(self.edges)
+        return [edge for edgeloop in self.edge_loops for edge in edgeloop.edges]
 
     @property
     def carts(self):
-        return None
+        return [cart for edge in self.edges for cart in edge.carts]
 
-    def getouterbound(self):
-        return self.modelinstance.get_entity_by_id(self.outerbound)
+    @property
+    def outerbound(self):
+        return self.outerbound_dom.entity
 
-    def getinnerbounds(self):
-        return self.modelinstance.get_entitys_by_ids(self.innerbounds)
-
-    def area(self):
-        pass
+    @property
+    def innerbounds(self):
+        return [loop.entity for loop in self.innerbounds_dom]
 
 
 class PlaneFace(Face, Ebene):
