@@ -11,5 +11,8 @@ class TestCase(unittest.TestCase):
     def test_faces(self):
         pass
 
+    def test_intersection(self):
+
+
 if __name__ == '__main__':
     unittest.main()

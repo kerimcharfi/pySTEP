@@ -45,9 +45,9 @@ class DOMElement:
 class Entity:
 
     # Initializer / Instance Attributes
-    def __init__(self, dom_element: DOMElement):
-        self.dom_element: DOMElement = dom_element
-        dom_element.entity = self
+    def __init__(self, domelement: DOMElement):
+        self.dom_element: DOMElement = domelement
+        domelement.entity = self
 
         self.modelledobject = None
         self.mygroups = []
@@ -66,19 +66,49 @@ class Entity:
     def __repr__(self):
         return "id: #" + str(self.id) + " Name: " + str(self.name)
 
-class Solid:
-    pass
+class Solid(Entity):
+
+    """
+    'CLOSED_SHELL' + 'MANIFOLD_SOLID_BREP'
+    """
+
+    def __init__(self, closed_shell_dom):
+        Entity.__init__(self, closed_shell_dom)
+        self.closed_shell_dom = closed_shell_dom
+        self.manifold_solid_brep_dom = closed_shell_dom.children[0]
+        self.bezeichnung = self.manifold_solid_brep_dom.data[0][0]
+
+    @property
+    def faces(self):
+        return [face_dom.entity for face_dom in self.dom_element.parents]
+
+    @property
+    def plane_faces(self):
+        return [face for face in self.faces if type(face) == PlaneFace]
 
 
 class Component(Entity):
 
+    """
+    'ADVANCED_BREP_SHAPE_REPRESENTATION' -> 'SHAPE_REPRESENTATION_RELATIONSHIP' -> 'SHAPE_REPRESENTATION' (enthaelt in parents 3 koordinatensysteme, darunter auch die richtige trafo ? für jeden koeper ein koord? eher 1 grundkoord aud 2koerper koords)
+        (groups alle koerper)
+
+    -> UNNAMED('REPRESENTATION_RELATIONSHIP', 'REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION', 'SHAPE_REPRESENTATION_RELATIONSHIP') ->  #2558'SHAPE_REPRESENTATION', #2557'SHAPE_REPRESENTATION', #12'ITEM_DEFINED_TRANSFORMATION'
+                                                                                                                                                                                                koordinatensystem1 -> koordinatensystem2
+
+     Definition einer Komponente, jedoch keine instanz
+    #2806      PRODUCT_DEFINITION                      -> #2795 'PRODUCT_DEFINITION_SHAPE' -> #2792 'SHAPE_DEFINITION_REPRESENTATION' -> #2802 'SHAPE_REPRESENTATION'
+                                                        -> 'NEXT_ASSEMBLY_USAGE_OCCURRENCE' (verknupfung zwischen parentcomponent und childcomponent + instanzname)
+    """
 
     def __init__(self, dom_element):
         Entity.__init__(self, dom_element)
 
-        self.solid = None
+        self.bezeichung = dom_element.data[0][0]
+
+        self.solids = None
         self.transformation = None
-        self.sub_components = []
+        self.sub_components = {}
         self.parent_component = None
 
         self.entitys = []
@@ -90,6 +120,13 @@ class Component(Entity):
         self.arcedges = []
         self.parents_instances = []
         self.surfacemesh = []
+
+
+    def __repr__(self):
+        return "id: #" + str(self.id) + " COMPONENT: " + str(self.bezeichung)
+
+    def __str__(self):
+        return "id: #" + str(self.id) + " COMPONENT: " + str(self.bezeichung)
 
     def complete__init__(self):
         for face in self.parents_instances:
@@ -112,9 +149,8 @@ import numpy as np
 
 class CartPoint(Vec, Entity):
 
-    def __init__(self, domelement):
+    def __init__(self, domelement, coords):
         Entity.__init__(self, domelement)
-        coords = domelement.data[1]
         Vec.__init__(self, koordinaten=np.array(coords, dtype=float))
         self.faces = []
 
@@ -124,26 +160,25 @@ class CartPoint(Vec, Entity):
 
     @property
     def edges(self):
-        return [child for child in self.children if issubclass(type(child), Edge)]
+        return [child.entity for child in self.dom_element.children if issubclass(type(child.entity), Edge)]
 
 
 class Axis(Gerade, Entity):
 
-    def __init__(self, entity, modelinstance):
-        Entity.__init__(self, entity.id, entity.name, entity.parentsstring, entity.data, modelinstance)
+    def __init__(self, domelement):
+        Entity.__init__(self, domelement)
         # gerade.__init__(self, entity)
 
 
 class Edgeloop(Entity):
 
-    def __init__(self, entity, modelinstance):
-        super().__init__(entity.id, entity.name, entity.parentsstring, entity.data, modelinstance)
-        self.parents = entity.parents
-        self.children = entity.children
+    def __init__(self, domelement):
+        super().__init__(domelement)
         self.edges = []
         self.orientations = []
 
-        for edgecurve in entity.parents:
+        #todo: remove
+        for edgecurve in domelement.parents:
             self.edges.append(edgecurve.parents[0].id)
 
 
@@ -164,32 +199,38 @@ class Path:
 
 class Edge(Entity):
 
-    def __init__(self, entity, modelinstance):
+    def __init__(self, domelement):
 
-        super().__init__(entity.id, entity.name, entity.parentsstring, entity.data, modelinstance)
-        self.parents = entity.parents
-        self.children = entity.children
+        super().__init__(domelement)
 
-        self.carts: [CartPoint] = [entity.parents[0], entity.parents[1]]
         self.faces = []
 
-        self._discretized: [Vec] = []
+        self._discretized: [Vec] = None
 
-        if entity.autoinit:
-            for edge_curv in entity.children:
-                self.faces.append(edge_curv.children[0].children[0].children[0])
+        for edge_curv in domelement.children:
+            self.faces.append(edge_curv.children[0].children[0].children[0])
+
+    @property
+    def carts(self):
+        return [self.dom_element.parents[0].entity, self.dom_element.parents[1].entity]
+
+    @property
+    def connected_edges(self):
+        carts = []
+        edges = [edge for cart in self.carts for edge in cart.edges if edge.id != self.id and carts.append(cart) is None]
+        return edges, carts
 
     def __str__(self):
         return str(self.__class__) + " " + str(self.carts)
 
     @property
     def discretized(self):
-        if not self._discretized:
+        if self._discretized is None:
             self.discretize()
         return self._discretized
 
     def discretize(self, num_points=10):
-        pass
+        self._discretized = self.carts
 
     def length(self):
         length = 0
@@ -202,15 +243,15 @@ class Edge(Entity):
 
 class ArcEdge(Edge):
 
-    def __init__(self, entity, modelinstance):
-        super().__init__(entity, modelinstance)
-        self.centeraxis = entity.parents[2].parents[0].parents[1]
+    def __init__(self, domelement):
+        super().__init__(domelement)
+        self.centeraxis_dom = domelement.parents[2].parents[0].parents[1]
         self.orientation = False
-        if entity.data == "F":
+        if domelement.data == "F":
             self.orientation = True  # entity is a oriented edge
 
-        self.radius = float(entity.parents[2].data[2])
-        self.base = entity.parents[2].parents[0].parents[0]  # circle/axisplacement/cart/data
+        self.radius = float(domelement.parents[2].data[2])
+        self.base_dom = domelement.parents[2].parents[0].parents[0]  # circle/axisplacement/cart/data
 
     def partof(self, line):
         pass
@@ -219,20 +260,20 @@ class ArcEdge(Edge):
         startvertex = self.carts[0]
         endevertex = self.carts[1]
 
-        vektorstart = startvertex - self.base
-        vektorende = endevertex - self.base
+        vektorstart = startvertex - self.base_dom.entity
+        vektorende = endevertex - self.base_dom.entity
         v = endevertex - startvertex
         if v == Vec([0, 0, 0]):
             v = vektorstart * (-1)
-        halbierendervertex = v.cross(self.centeraxis).norm() * self.radius + self.base
+        halbierendervertex = v.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
         vviertel1 = halbierendervertex - startvertex
-        viertel1vertex = vviertel1.cross(self.centeraxis).norm() * self.radius + self.base
+        viertel1vertex = vviertel1.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
         vviertel3 = endevertex - halbierendervertex
-        viertel3vertex = vviertel3.cross(self.centeraxis).norm() * self.radius + self.base
-        self.vertices = self.tesselatesmallarc(self.base, startvertex, viertel1vertex, self.radius, num_points) \
-                        + self.tesselatesmallarc(self.base, viertel1vertex, halbierendervertex, self.radius, num_points) \
-                        + self.tesselatesmallarc(self.base, halbierendervertex, viertel3vertex, self.radius, num_points) \
-                        + self.tesselatesmallarc(self.base, viertel3vertex, endevertex, self.radius, num_points)
+        viertel3vertex = vviertel3.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
+        self._discretized = self.tesselatesmallarc(self.base_dom.entity, startvertex, viertel1vertex, self.radius, num_points) \
+                        + self.tesselatesmallarc(self.base_dom.entity, viertel1vertex, halbierendervertex, self.radius, num_points) \
+                        + self.tesselatesmallarc(self.base_dom.entity, halbierendervertex, viertel3vertex, self.radius, num_points) \
+                        + self.tesselatesmallarc(self.base_dom.entity, viertel3vertex, endevertex, self.radius, num_points)
 
     def tesselatesmallarc(self, base, startvertex, endevertex, radius, resolution):
         edges = []
@@ -258,40 +299,26 @@ class ArcEdge(Edge):
 
 class EllipseEdge(Edge):
 
-    def __init__(self, entity, modelinstance):
-        super().__init__(entity, modelinstance)
-        self.centeraxis = entity.getParents(2).getParents(0).getParents(1)
-        self.referenceaxis = entity.getParents(2).getParents(0).getParents(2)
+    def __init__(self, domelement):
+        super().__init__(domelement)
+        self.centeraxis_dom = domelement.parents[2].parents[0].parents[1]
+        self.referenceaxis_dom = domelement.parents[2].parents[0].parents[2]
 
-        self.startvertex = entity.getParents(0).getParents(0).id  # get vector ( of direction and length) orientededge/edgecurve/vertex/cart/data
-        self.radius1 = float(entity.getParents(2).getData()[0])
-        self.radius2 = float(entity.getParents(2).getData()[1])
-        self.endevertex = entity.getParents(1).getParents(0).id  # get Cart
-        self.carts = [entity.getParents(0).getParents(0), entity.getParents(1).getParents(0)]
-        self.base = entity.getParents(2).getParents(0).getParents(0).id  # circle/axisplacement/cart/data
+        self.radius1 = float(domelement.parents[2].getData()[0])
+        self.radius2 = float(domelement.parents[2].getData()[1])
+
+        self.base_dom = domelement.parents[2].parents[0].parents[0]  # circle/axisplacement/cart/data
 
         self.orientation = True
-        if entity.getChildren()[0].getData()[0] == "F.":
+        if domelement.getChildren()[0].getData()[0] == "F.":
             self.orientation = False  # entity is a oriented edge
             # startvertex = self.startvertex
             # self.startvertex = self.endevertex
             # self.endevertex = startvertex
-        self.centeraxis = Gerade(self.getbase(), self.centeraxis)
+        self.centeraxis = Gerade(self.base, self.centeraxis)
 
         # self.ellipsetesselate(60)
         self.ellipsetesselateelegantly()
-
-    def getcenteraxis(self):
-        return self.modelinstance.getEntityByID(self.centeraxis)
-
-    def getstartvertex(self):
-        return self.modelinstance.getEntityByID(self.startvertex)
-
-    def getendevertex(self):
-        return self.modelinstance.getEntityByID(self.endevertex)
-
-    def getbase(self):
-        return self.modelinstance.getEntityByID(self.base)
 
     def partof(self, line):
         pass
@@ -345,101 +372,72 @@ import trimesh.path.curve
 
 class SplineEdge(Edge):
 
-    def __init__(self, entity, modelinstance, controls):
-        super().__init__(entity, modelinstance)
-        self.knots = self.parents[2].parents
+    def __init__(self, domelement, controls):
+        super().__init__(domelement)
+        self.knots_dom = domelement.parents[2].parents
         self.controls = controls
 
+    @property
+    def knots(self):
+        return [dom_knot.entity for dom_knot in self.knots_dom]
 
-    def discretize(self, num_points= 500):
-        return trimesh.path.curve.discretize_bspline(self.knots, self.controls, num_points)
+    def discretize(self, num_points= 80):
+        self._discretized = trimesh.path.curve.discretize_bspline(self.knots, self.controls, num_points)
 
 class Line(Edge, Gerade):
 
-    def __init__(self, entity, modelinstance):
-        Edge.__init__(self, entity, modelinstance)
+    def __init__(self, domelement):
+        Edge.__init__(self, domelement)
 
-        self.floatlength = 0
+        # self.richtung = self.carts[1] - self.carts[0]
+        #
+        # Gerade.__init__(self, stutze=self.carts[0], richtung=self.richtung)
 
-        if entity.autoinit:
-            if len(self.carts) == 2:
-                self.richtung = self.carts[1] - self.carts[0]
-                self.floatlength = abs(self.richtung)
-                Gerade.__init__(self, stutze=self.carts[0], richtung=self.richtung)
-
-    def equals(self, line):
-        None
-
-    def partof(self, line):
-        None
-
-    def getdirection(self):
-        return self.direction
-
-    def getbase(self):
-        return self.base
-
-    def getstart(self):
-        None
-
-    def getvertices(self):
-        pass
-
-    def write_to_2dmsp(self, msp):
-        msp.add_line(self.carts[0].getxy(), self.carts[1].getxy())
-
-    def tesselate(self, resolution, mode):
-        return self.getvertices()
 
     def __str__(self):
         return "LINE" + str(self.vertices[0]) + str(self.vertices[1])
 
 
 class Face(Entity):  # advanced face
-    def __init__(self, entity: Entity, Modelinstance):
-        super().__init__(entity.id, entity.name, entity.parentsstring, entity.data, Modelinstance)
+    def __init__(self, domelement):
+        super().__init__(domelement)
 
         self.connectingedge = None
-        self.parents = entity.parents
-        self.children = entity.children
-        self.outerbound = Modelinstance.override_entity(Edgeloop(self.parents[0].parents[0], Modelinstance))  # outboundid
-        self.innerbounds = []  # array of edgeloopids
-        for innerbound in self.parents[1:-1]:
-            innerboundid = Modelinstance.overrideentity(Edgeloop(innerbound.getParents()[0], Modelinstance))
-            self.innerbounds.append(innerboundid)
-        self.edges = []
-        self.edge_instances = []
+
+        self.outerbound_dom = domelement.parents[0].parents[0] # outboundid
+        self.innerbounds_dom = []  # array of edgeloopids
+        for innerbound in domelement.parents[1:-1]:
+            self.innerbounds_dom.append(innerbound.parents[0])
+
+        self._edges = []
+
         self.neighbours = []
         self.connectingedges = []
 
-        self.component = self.children[0]  # type:Component
-
-        outerbound = self.getouterbound()
-
-        for edge in outerbound.getedges():
-
-            self.edges.append(edge.id)  ##serving dif context
-            self.edge_instances.append(edge)
-            for cart in edge.carts:
-                cart.appendface(self)
-
-            for faceid in edge.faces:
-                if not faceid == self.id:
-                    self.neighbours.append(faceid)
-                    self.connectingedges.append(edge.id)
-
-        for edgeloop in self.getinnerbounds():
-            for edge in edgeloop.getedges():
-
-                self.edges.append(edge.id)
-                self.edge_instances.append(edge)
-                for cart in edge.carts:
-                    cart.appendface(self)
-                for faceid in edge.faces:
-                    if not faceid == self.id:
-                        self.neighbours.append(faceid)
-
-
+        # outerbound = self.getouterbound()
+        #
+        # for edge in outerbound.getedges():
+        #
+        #     self.edges.append(edge.id)  ##serving dif context
+        #     self.edge_instances.append(edge)
+        #     for cart in edge.carts:
+        #         cart.appendface(self)
+        #
+        #     for faceid in edge.faces:
+        #         if not faceid == self.id:
+        #             self.neighbours.append(faceid)
+        #             self.connectingedges.append(edge.id)
+        #
+        # for edgeloop in self.getinnerbounds():
+        #     for edge in edgeloop.getedges():
+        #
+        #         self.edges.append(edge.id)
+        #         self.edge_instances.append(edge)
+        #         for cart in edge.carts:
+        #             cart.appendface(self)
+        #         for faceid in edge.faces:
+        #             if not faceid == self.id:
+        #                 self.neighbours.append(faceid)
 
     def getneighbours(self):
         neighbours = self.modelinstance.getEntitysByIDs(self.neighbours)
@@ -448,8 +446,13 @@ class Face(Entity):  # advanced face
             neighbour.connectingedge = connectingedge
         return neighbours
 
-    def getedges(self):
+    @property
+    def edges(self):
         return self.modelinstance.get_entitys_by_ids(self.edges)
+
+    @property
+    def carts(self):
+        return None
 
     def getouterbound(self):
         return self.modelinstance.get_entity_by_id(self.outerbound)
@@ -462,31 +465,21 @@ class Face(Entity):  # advanced face
 
 
 class PlaneFace(Face, Ebene):
-    def __init__(self, entity, Modelinstance):
-        Face.__init__(self, entity, Modelinstance)
+    def __init__(self, domelement):
+        Face.__init__(self, domelement)
 
-        self.plane = self.parents[len(self.parents) - 1].id
+        self.plane_dom = domelement.parents[-1]
 
-        plane = self.getplane().parents[0]
+        plane = self.plane_dom.parents[0]
         plane2 = plane.parents
-        self.base = plane2[0].id
-        normalenvektor = plane2[1]
-        self.normalenvektor = normalenvektor.id
-        self.nv_instance = normalenvektor
+        self.base_dom = plane2[0]
 
-        Ebene.__init__(self, self.getBase(), self.nv_instance)
+        self.normal_dom = plane2[1]
+
+        Ebene.__init__(self, Vec(np.array(self.base_dom.data[1],dtype=float)), Vec(np.array(self.normal_dom.data[1],dtype=float)))
 
     def __str__(self):
         return "planeface: " + str(self.plane)
-
-    def getplane(self):
-        return self.modelinstance.get_entity_by_id(self.plane)
-
-    def getBase(self):
-        return self.modelinstance.get_entity_by_id(self.base)
-
-    def getunitvector(self):
-        return self.modelinstance.get_entity_by_id(self.normalenvektor)
 
     def tesselate(self, mode):
         if mode == "vertex":
@@ -532,15 +525,15 @@ class PlaneFace(Face, Ebene):
 
 
 class CylindricalFace(Face):
-    def __init__(self, entity, Modelinstance):
-        super().__init__(entity, Modelinstance)
-        cylinder = self.parents[1]  # cylinderform
+    def __init__(self, domelement):
+        super().__init__(domelement)
+        cylinder = domelement.parents[1]  # cylinderform
         self.radius = float(cylinder.data[2])
         self.base = cylinder.parents[0].parents[0]
         mainaxis = cylinder.parents[0].parents[1]
         self.mainaxis = Gerade(self.base, mainaxis)
         self.secondaxis = cylinder.parents[0].parents[2]
-        self.faceboundedges = self.parents[0].parents[0].parents
+        self.faceboundedges = domelement.parents[0].parents[0].parents
         self.areavalue = 0  # to do extract lines,  actually OUTDATED ? difference between getedges of super ?
 
     def __str__(self):

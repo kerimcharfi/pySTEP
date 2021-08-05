@@ -20,6 +20,7 @@ class Model:
         self.file_path = file_path
 
         self.components = []
+        self.solids = []
         self.entitys = []
         self.DOM = []
 
@@ -95,19 +96,29 @@ class Model:
                 domelement.parents.append(self.get_dom_elem_by_id(parent_id))
                 self.get_dom_elem_by_id(parent_id).children.append(domelement)
 
+        assembly_connections = []
         ### create entities
         for domelement in self.DOM:
 
             if domelement.name == "CARTESIAN_POINT":
-                self.entitys.append(CartPoint(domelement))
+                coords = domelement.data[1]
+                self.entitys.append(CartPoint(domelement, coords))
             elif domelement.name == "DIRECTION":
-                self.entitys.append(CartPoint(domelement))
+                coords = domelement.data[1]
+                self.entitys.append(CartPoint(domelement, coords))
+
+            elif domelement.name == "NEXT_ASSEMBLY_USAGE_OCCURRENCE":
+                assembly_connections.append(domelement)
 
             elif domelement.name == "CLOSED_SHELL":
+                solid = Solid(domelement)
+                self.entitys.append(solid)
+                self.solids.append(solid)
+
+            elif domelement.name == "PRODUCT_DEFINITION":
                 component = Component(domelement)
                 self.entitys.append(component)
                 self.components.append(component)
-
 
             elif domelement.name == "ADVANCED_FACE":
                 if domelement.parents[-1].name == "PLANE":
@@ -168,8 +179,8 @@ class Model:
                         self.entitys.append(SplineEdge( domelement, control))
 
             elif domelement.name == "VECTOR":
-                coords = (Vec(domelement.parents[0].koordinaten) * float(domelement.data[2])).koordinaten
-                self.entitys.append(CartPoint(domelement))
+                coords = (Vec(np.array(domelement.parents[0].data[1], dtype=float)) * float(domelement.data[2])).koordinaten
+                self.entitys.append(CartPoint(domelement, coords))
 
             elif domelement.name== "VERTEX_POINT":
 
@@ -189,9 +200,15 @@ class Model:
 
                 #insert basic entity ? self.entitys.append(Entity(id, name, parents, data, self))
 
+        for domelement in assembly_connections:
+            parent = domelement.parents[0].entity
+            child = domelement.parents[1].entity
+            name = domelement.data[0][0]
+            parent.sub_components[name] = child
 
         for component in self.components:
             component.complete__init__()
+
 
         print("Model loaded")
 
