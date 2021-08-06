@@ -41,6 +41,7 @@ class Model:
                 bracket_stack = []
                 container_stack = [[]]
                 stream = ''
+                current_stream_is_string = False
 
                 for char in b:
                     if "(" == char or (char == "'" and bracket_stack[-1]!="'"):
@@ -65,7 +66,8 @@ class Model:
                             stream = ''
 
                     else:
-                        stream += char
+                        if char not in ["\n"]:
+                            stream += char
 
                 else:
                     if stream:

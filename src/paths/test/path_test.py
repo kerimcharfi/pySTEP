@@ -80,7 +80,14 @@ def expand_path(seed_edge):
     elif expanded_edges[-1].discretized[-1] == polyline[-1]:
         polyline.extend(list(reversed(expanded_edges[-1].discretized)))
 
-    return polyline
+    clean_poly = [polyline[0]]
+    for i, point in enumerate(polyline[:-1], 1):
+        nextpoint = polyline[i]
+        if not np.allclose(point, nextpoint):
+            clean_poly.append(nextpoint)
+        else:
+            print("filtered doublicate")
+    return clean_poly
 
 def find_profile(solid):
     profil_flachen = []
@@ -109,23 +116,48 @@ def find_profile(solid):
 
 def find_middle_line(polylines):
     pml = []
-    pl = list(polylines.pop())
-    for i in range(len(pl) - 1):
 
-        p1, p2 = pl[i], pl[i + 1]
+    # max abstand von pml
+
+
+    ## verlängerung, sodass schnittpunkte gewährleistet sind
+    for i, pl in enumerate(polylines[:-1]):
+        polylines[i] = [pl[0]-pl[1]+pl[0], *pl, pl[-1]-pl[-2]+pl[-1]]
+    #-------
+
+    pl = list(polylines[-1])
+    for i in range(len(pl)):
+        if i == len(pl) - 1:
+            p1, p2 = pl[i], pl[i - 1]
+        else:
+            p1, p2 = pl[i], pl[i + 1]
 
         intersection_points = []
-        for polyline in polylines:
+        for polyline in polylines[:-1]:
             segments = [[], []]
             for k in range(len(polyline) - 1):
                 segments[0].append(polyline[k])
                 segments[1].append(polyline[k + 1])
 
-            p, v = trimesh.intersections.plane_lines(p1, p2 - p1, segments)
-            if len(p) > 0:
-                intersection_points.append(p[0])
+            pts, v = trimesh.intersections.plane_lines(p1, p2 - p1, segments)
+
+            ## nur den schnittpunkt mit der kleinsten entfernung nutzen
+            if len(pts) > 0:
+                min_dist = np.linalg.norm(pts[0] - p1)
+                min_point = pts[0]
+                for p in pts:
+                    if np.linalg.norm(p - p1)  < min_dist:
+                        min_point = p
+                        min_dist = np.linalg.norm(p - p1)
+
+                intersection_points.append(min_point)
+            else:
+                print("warning: no intersection found")
 
         intersection_points.append(p1)
+
+        if len(intersection_points) != len(polylines):
+            print("unregelmäßigkeit in anzahl der schnittpunkte")
 
         new_pml_point = np.array([0, 0, 0], dtype=float)
 
@@ -141,74 +173,50 @@ class MyTestCase(unittest.TestCase):
 
         start = time.time()
 
-        model = Model("draht.step")
+        #model = Model("draht.step")
+        model = Model("2 wires.step")
         # model = Model("component and solids.step")
         # model = Model("step_components_solids.step")
 
-        for edge in model.solids[0].edges:
-            path = trimesh.load_path(edge.discretized)
+        # for edge in model.solids[0].edges:
+        #     path = trimesh.load_path(edge.discretized)
+        #     scene.add_geometry(path)
+        for solid in model.solids:
+            profil_flachen, pl_seeds = find_profile(solid)
+            lowerplaneface = profil_flachen[0]
+            pl_seeds = pl_seeds[0]
+
+            #splinedges = [236, 237, 245, 249, 253, 257, 260, 261]
+            splinedges = [236, 237, 245, 249, 253, 257, 260, 261]
+
+            polylines = []
+            for pl_seed in pl_seeds:
+                polylines.append(expand_path(pl_seed))
+
+            pml = find_middle_line(polylines)
+
+            ## Profil extrahieren
+            profil = lowerplaneface.outerbound
+
+            ## Visualize
+
+            for pl in polylines:
+                scene.add_geometry(trimesh.load_path(pl))
+            for edge in lowerplaneface.edges:
+                path = trimesh.load_path(edge.discretized)
+                path.colors = [[255,0,0,255]]
+                scene.add_geometry(path)
+            path = trimesh.load_path(pml)
             scene.add_geometry(path)
-
-        profil_flachen, pl_seeds = find_profile(model.solids[0])
-        lowerplaneface = profil_flachen[0]
-        pl_seeds = pl_seeds[0]
-
-        #splinedges = [236, 237, 245, 249, 253, 257, 260, 261]
-        splinedges = [236, 237, 245, 249, 253, 257, 260, 261]
-
-        polylines = []
-        for pl_seed in pl_seeds:
-            polylines.append(expand_path(pl_seed))
-
-        pml = find_middle_line(polylines)
-
-
-        for edge in lowerplaneface.edges:
-            path = trimesh.load_path(edge.discretized)
-            path.colors = [[255,0,0,255]]
-            scene.add_geometry(path)
-
-
 
         # print(time.time() - start)
         # with open("polyline.json", "w") as f:
         #     f.write(json.dumps(np.array([pml, pl], dtype=float).tolist()))
-        path = trimesh.load_path(pml)
-        scene.add_geometry(path)
+
+
         trimesh.viewer.SceneViewer(scene)
 
-        #check for lower z value
-
-        ## Finde Anfang der PL
-        profil_linien = []
-        for vert in lowerplaneface:
-            for edge in vert.edges:
-                if edge not in lowerplaneface.edges:
-                    profil_linien.append(edge)
-
-        ## PLs expandieren
-        paths = []
-
-        def find_next_segment(pl):
-            vert = pl[-1]
-            for edge in vert.edges:
-                if edge[-1].angle(pl[-1]) < np.deg2rad(5):
-                    paths[-1].append(edge)
-                    find_next_segment(edge)
-                    break
-
-
-        for pl in profil_linien:
-            paths.append([pl])
-            find_next_segment(pl)
-
-        ## Profil extrahieren
-        profil = lowerplaneface.edgeloops[0]
-
         ## Zentroid methode
-
-
-
 
         print(model)
 
