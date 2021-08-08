@@ -174,9 +174,10 @@ class MyTestCase(unittest.TestCase):
         start = time.time()
 
         #model = Model("draht.step")
-        model = Model("2 wires.step")
+        #model = Model("2 wires.step")
         # model = Model("component and solids.step")
         # model = Model("step_components_solids.step")
+        model = Model("wires.step")
 
         # for edge in model.solids[0].edges:
         #     path = trimesh.load_path(edge.discretized)
@@ -197,6 +198,10 @@ class MyTestCase(unittest.TestCase):
 
             ## Profil extrahieren
             profil = lowerplaneface.outerbound
+            translation = pml[0]
+
+            with open("{}_polyline.json".format(solid.bezeichnung.replace('\\', '')), "w") as f:
+                f.write(json.dumps([[list(point) for point in pml], [list(point) for point in polylines[0]] ]))
 
             ## Visualize
 
@@ -215,8 +220,7 @@ class MyTestCase(unittest.TestCase):
             scene.add_geometry(path)
 
         # print(time.time() - start)
-        # with open("polyline.json", "w") as f:
-        #     f.write(json.dumps(np.array([pml, pl], dtype=float).tolist()))
+
 
 
         trimesh.viewer.SceneViewer(scene)
