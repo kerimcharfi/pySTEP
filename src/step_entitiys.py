@@ -190,6 +190,25 @@ class Edgeloop(Entity):
     def edges(self):
         return [dom_el.parents[0].entity for dom_el in self.dom_element.parents]
 
+    @property
+    def discretized(self):
+        edges = self.edges
+        discretized = edges[0].discretized
+
+        i = 0
+        while len(edges) > 0:
+            i+=1
+            if i >= len(edges):
+                i = 0
+            if discretized[-1] == edges[i].carts[0]:
+                discretized.extend(edges[i].discretized[1:])
+                edges.pop(i)
+            elif discretized[-1] == edges[i].carts[1]:
+                discretized.extend(reversed(edges[i].discretized[:-1]))
+                edges.pop(i)
+
+        return discretized
+
 
 class Path:
     "multiple non closed, continous edges"

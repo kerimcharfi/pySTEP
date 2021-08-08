@@ -115,10 +115,10 @@ def find_profile(solid):
     return profil_flachen, normal_edges
 
 def find_middle_line(polylines):
+
     pml = []
 
     # max abstand von pml
-
 
     ## verlängerung, sodass schnittpunkte gewährleistet sind
     for i, pl in enumerate(polylines[:-1]):
@@ -202,11 +202,16 @@ class MyTestCase(unittest.TestCase):
 
             for pl in polylines:
                 scene.add_geometry(trimesh.load_path(pl))
-            for edge in lowerplaneface.edges:
-                path = trimesh.load_path(edge.discretized)
-                path.colors = [[255,0,0,255]]
-                scene.add_geometry(path)
+
+            ## visualize lower Face
+            path = trimesh.load_path(lowerplaneface.outerbound.discretized)
+            path.colors = [[255,0,0,255]]
+            scene.add_geometry(path)
+
+            #visualize middle line
+
             path = trimesh.load_path(pml)
+            path.colors = [[0, 255, 0, 255]]
             scene.add_geometry(path)
 
         # print(time.time() - start)

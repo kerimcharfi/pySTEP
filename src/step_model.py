@@ -29,6 +29,7 @@ class Model:
         data_section = False
 
         # parse text and create DOM elements
+
         for b in blocks:
 
             if not data_section and "DATA" in b:
@@ -37,7 +38,7 @@ class Model:
             if data_section:
 
                 # data = re.findall('(\-*\w+\.\d*\w*\-*\+*\d*)', b)  ##Changed to get T. and F.
-                #  data = re.findall('(\-*\d+\.\d*\w*\-*\+*\d*)', b)  ##worked perfect for numbers
+                # data = re.findall('(\-*\d+\.\d*\w*\-*\+*\d*)', b)  ##worked perfect for numbers
                 bracket_stack = []
                 container_stack = [[]]
                 stream = ''
