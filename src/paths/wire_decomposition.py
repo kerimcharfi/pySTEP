@@ -119,7 +119,7 @@ def find_middle_line(polylines):
 
     ## verlängerung, sodass schnittpunkte gewährleistet sind
     for i, pl in enumerate(polylines[:-1]):
-        polylines[i] = [pl[0] - pl[1] + pl[0], *pl, pl[-1] - pl[-2] + pl[-1]]
+        polylines[i] = [Vec(pl[0] - pl[1]).norm(10) + pl[0], *pl, Vec(pl[-1] - pl[-2]).norm(10) + pl[-1]]
     # -------
 
     pl = list(polylines[-1])
@@ -166,8 +166,19 @@ def find_middle_line(polylines):
 
 
 def simplify_line(polyline, target_num_segments):
+    """
+    fuse smallest segment with smalles neighbour until target_num_segments is reached
+
+    :param polyline:
+    :param target_num_segments:
+    :return:
+    """
+
     polyline = np.array(polyline, dtype=float)
     polyline = list(polyline)
+
+    # segments = [(polyline[i] - polyline[i + 1], i, i+1)for i in range(len(polyline) - 1)]
+    # segments.sort(key=lambda x: x[0])
 
     while len(polyline) > target_num_segments:
         smallest_segment = (polyline[0] - polyline[1], 0)
@@ -175,8 +186,11 @@ def simplify_line(polyline, target_num_segments):
             if np.linalg.norm(polyline[i] - polyline[i + 1]) < np.linalg.norm(smallest_segment[0]):
                 smallest_segment = (polyline[i] - polyline[i + 1], i)
 
-        if smallest_segment[1] == 0:
-            polyline.pop(smallest_segment[1] + 1)
+        index = smallest_segment[1]
+        if index == 0:
+            polyline.pop(index + 1)
+        elif index < len(polyline)-2 and np.linalg.norm(polyline[index + 1] - polyline[index + 2]) < np.linalg.norm(polyline[index-1] - polyline[index]):
+            polyline.pop(index + 1)
         else:
             polyline.pop(smallest_segment[1])
 

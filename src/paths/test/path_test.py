@@ -12,7 +12,7 @@ import time
 import json
 from vectors import Vec
 
-from paths.test.wire_decomposition import *
+from paths.wire_decomposition import *
 
 
 class MyTestCase(unittest.TestCase):
@@ -21,7 +21,8 @@ class MyTestCase(unittest.TestCase):
 
         start = time.time()
 
-        model = Model("draht.step")
+        model = Model("abgetrennter_draht.step")
+        # model = Model("draht.step")
         # model = Model("2 wires.step")
         # model = Model("component and solids.step")
         # model = Model("step_components_solids.step")
@@ -68,8 +69,8 @@ class MyTestCase(unittest.TestCase):
             #
             # ## Visualize
             #
-            # for pl in polylines:
-            #     scene.add_geometry(trimesh.load_path(pl))
+            for pl in polylines:
+                scene.add_geometry(trimesh.load_path(pl))
 
             ## visualize lower Face
             path = trimesh.load_path([list(cart - translation) for cart in profil.discretized])
