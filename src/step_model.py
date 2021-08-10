@@ -25,7 +25,9 @@ class Model:
         self.DOM = []
 
         self.idcounter = 0
-        blocks = re.findall(r'([\S\s]+?);', document)
+
+        #blocks = re.findall(r'([\S\s]+?);', document)
+        blocks = document.replace('\n', '').split(";")
         data_section = False
 
         # parse text and create DOM elements
@@ -75,11 +77,12 @@ class Model:
                         container_stack[-1].append(stream)
 
 
-                id_and_name_block = container_stack[0][0]
-                data = container_stack[0][-1]
+
                 all_ids_in_b = re.findall('#(\d+)', b)
 
                 if all_ids_in_b:
+                    id_and_name_block = container_stack[0][0]
+                    data = container_stack[0][-1]
                     id = int(all_ids_in_b.pop(0))
                     parent_ids = [int(id_str) for id_str in all_ids_in_b]
                     name = re.findall(r'=(\w+)|$', id_and_name_block)[0]

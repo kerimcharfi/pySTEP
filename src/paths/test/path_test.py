@@ -12,160 +12,8 @@ import time
 import json
 from vectors import Vec
 
-def steady_neighbour_edges(edge):
-    connected_edges, connecting_verts = edge.connected_edges
-    extending_edges = []
+from paths.test.wire_decomposition import *
 
-
-    for connected_edge, connecting_vert in zip(connected_edges, connecting_verts):
-        connecting_segmnents = []
-        connecting_directions = []
-        if np.allclose(connecting_vert, connected_edge.discretized[0]):
-            connecting_segmnents.append([connected_edge.discretized[0], connected_edge.discretized[1]])
-            connecting_directions.append(connected_edge.discretized[1] - connected_edge.discretized[0])
-
-        elif np.allclose(connecting_vert, connected_edge.discretized[-1]):
-            connecting_segmnents.append([connected_edge.discretized[-1], connected_edge.discretized[-2]])
-            connecting_directions.append(connected_edge.discretized[-2] - connected_edge.discretized[-1])
-
-        if np.allclose(connecting_vert, edge.discretized[0]):
-            connecting_segmnents.append([edge.discretized[0], edge.discretized[1]])
-            connecting_directions.append(edge.discretized[1] - edge.discretized[0])
-
-        elif np.allclose(connecting_vert, edge.discretized[-1]):
-            connecting_segmnents.append([edge.discretized[-1], edge.discretized[-2]])
-            connecting_directions.append(edge.discretized[-1] - edge.discretized[-2])
-
-        angle =  Vec(connecting_directions[0]).angle(Vec(connecting_directions[1]))
-        if angle < 0.2 or angle > np.pi - 0.2:
-            extending_edges.append(connected_edge)
-
-    return extending_edges
-
-def expand_path(seed_edge):
-    """
-    linie muss hintereinander alle verts wiedergeben
-    :param seed_edge:
-    :return:
-    """
-    polyline = []
-
-    expanded_edges = [seed_edge]
-    expanding = True
-
-    lastedge = seed_edge
-    while expanding:
-
-        nextedges = set(steady_neighbour_edges(lastedge))
-        nextedges.difference_update(expanded_edges)
-
-        expanded_edges.extend(nextedges)
-
-        if len(nextedges) == 0:
-            expanding = False
-        else:
-            lastedge = list(nextedges)[0]
-
-    for i, edge in enumerate(expanded_edges[:-1]):
-        nextedge = expanded_edges[i+1]
-        if edge.discretized[-1] == nextedge.discretized[-1] or edge.discretized[-1] == nextedge.discretized[0]:
-            polyline.extend(edge.discretized)
-        elif edge.discretized[0] == nextedge.discretized[-1] or edge.discretized[0] == nextedge.discretized[0]:
-            polyline.extend(list(reversed(edge.discretized)))
-        else:
-            raise Exception("non matching discretized")
-
-    if expanded_edges[-1].discretized[0] == polyline[-1]:
-        polyline.extend(expanded_edges[-1].discretized)
-    elif expanded_edges[-1].discretized[-1] == polyline[-1]:
-        polyline.extend(list(reversed(expanded_edges[-1].discretized)))
-
-    clean_poly = [polyline[0]]
-    for i, point in enumerate(polyline[:-1], 1):
-        nextpoint = polyline[i]
-        if not np.allclose(point, nextpoint):
-            clean_poly.append(nextpoint)
-        else:
-            print("filtered doublicate")
-    return clean_poly
-
-def find_profile(solid):
-    profil_flachen = []
-    normal_edges = []
-
-    for face in solid.plane_faces:
-        face_normal_edges = []
-        for vert in face.carts:
-            for edge in vert.edges:
-                if edge.discretized[0] == vert:
-                    direction = edge.discretized[0] - Vec(edge.discretized[1])
-                else:
-                    direction = Vec(edge.discretized[-2]) - edge.discretized[-1]
-                if Vec(direction).isparallelto(face.normal):
-                    face_normal_edges.append(edge)
-                    break
-            else:
-                break
-        else:
-            profil_flachen.append(face)
-            normal_edges.append(face_normal_edges)
-
-    assert len(profil_flachen) < 3
-
-    return profil_flachen, normal_edges
-
-def find_middle_line(polylines):
-
-    pml = []
-
-    # max abstand von pml
-
-    ## verlängerung, sodass schnittpunkte gewährleistet sind
-    for i, pl in enumerate(polylines[:-1]):
-        polylines[i] = [pl[0]-pl[1]+pl[0], *pl, pl[-1]-pl[-2]+pl[-1]]
-    #-------
-
-    pl = list(polylines[-1])
-    for i in range(len(pl)):
-        if i == len(pl) - 1:
-            p1, p2 = pl[i], pl[i - 1]
-        else:
-            p1, p2 = pl[i], pl[i + 1]
-
-        intersection_points = []
-        for polyline in polylines[:-1]:
-            segments = [[], []]
-            for k in range(len(polyline) - 1):
-                segments[0].append(polyline[k])
-                segments[1].append(polyline[k + 1])
-
-            pts, v = trimesh.intersections.plane_lines(p1, p2 - p1, segments)
-
-            ## nur den schnittpunkt mit der kleinsten entfernung nutzen
-            if len(pts) > 0:
-                min_dist = np.linalg.norm(pts[0] - p1)
-                min_point = pts[0]
-                for p in pts:
-                    if np.linalg.norm(p - p1)  < min_dist:
-                        min_point = p
-                        min_dist = np.linalg.norm(p - p1)
-
-                intersection_points.append(min_point)
-            else:
-                print("warning: no intersection found")
-
-        intersection_points.append(p1)
-
-        if len(intersection_points) != len(polylines):
-            print("unregelmäßigkeit in anzahl der schnittpunkte")
-
-        new_pml_point = np.array([0, 0, 0], dtype=float)
-
-        for intersection in intersection_points:
-            new_pml_point += intersection * (1 / len(intersection_points))
-
-        pml.append(new_pml_point)
-    return pml
 
 class MyTestCase(unittest.TestCase):
     def test_discretize_spline(self):
@@ -173,21 +21,22 @@ class MyTestCase(unittest.TestCase):
 
         start = time.time()
 
-        #model = Model("draht.step")
-        #model = Model("2 wires.step")
+        model = Model("draht.step")
+        # model = Model("2 wires.step")
         # model = Model("component and solids.step")
         # model = Model("step_components_solids.step")
-        model = Model("wires.step")
+        #model = Model("wires.step")
 
-        # for edge in model.solids[0].edges:
-        #     path = trimesh.load_path(edge.discretized)
-        #     scene.add_geometry(path)
-        for solid in model.solids:
+        print(start - time.time())
+        for edge in model.solids[0].edges:
+            path = trimesh.load_path(edge.discretized)
+            scene.add_geometry(path)
+        wires_dicts = []
+        for i, solid in enumerate(model.solids):
             profil_flachen, pl_seeds = find_profile(solid)
             lowerplaneface = profil_flachen[0]
             pl_seeds = pl_seeds[0]
 
-            #splinedges = [236, 237, 245, 249, 253, 257, 260, 261]
             splinedges = [236, 237, 245, 249, 253, 257, 260, 261]
 
             polylines = []
@@ -199,29 +48,49 @@ class MyTestCase(unittest.TestCase):
             ## Profil extrahieren
             profil = lowerplaneface.outerbound
             translation = pml[0]
+            pml = simplify_line(pml, 15)
+            wires_dicts.append({
+                "wire_id": solid.bezeichnung.replace('\\', '') + str(i),
+                "base_pose": [
+                    (translation / 100).tolist(),
+                    [0, 0, 0, 1]
+                ],
+                "type": "wire",
+                "seg_lengths": [np.linalg.norm(pml[i] - pml[i + 1]) for i in range(len(pml) - 1)],
+                "mittel_profillinie": [list(point - translation) for point in pml],
+                "rand_profillinie": [list(point - translation) for point in simplify_line(polylines[0], 15)],
+                "profil": {
+                    "type": "polygon",
+                    "points": [list(cart - translation) for cart in profil.discretized]
+                }
+            })
 
-            with open("{}_polyline.json".format(solid.bezeichnung.replace('\\', '')), "w") as f:
-                f.write(json.dumps([[list(point) for point in pml], [list(point) for point in polylines[0]] ]))
-
-            ## Visualize
-
-            for pl in polylines:
-                scene.add_geometry(trimesh.load_path(pl))
+            #
+            # ## Visualize
+            #
+            # for pl in polylines:
+            #     scene.add_geometry(trimesh.load_path(pl))
 
             ## visualize lower Face
-            path = trimesh.load_path(lowerplaneface.outerbound.discretized)
-            path.colors = [[255,0,0,255]]
+            path = trimesh.load_path([list(cart - translation) for cart in profil.discretized])
+            path.colors = [[255, 0, 0, 255]]
             scene.add_geometry(path)
 
-            #visualize middle line
+            # visualize middle line
 
             path = trimesh.load_path(pml)
             path.colors = [[0, 255, 0, 255]]
             scene.add_geometry(path)
 
+        ## safe wires.json file
         # print(time.time() - start)
+        with open("wires.json", "w") as f:
+            f.write(json.dumps(wires_dicts))
 
-
+        # ## visualize lower Face
+        # path = trimesh.load_path([list(cart - translation) for cart in profil.discretized])
+        # path.colors = [[255, 0, 0, 255]]
+        # scene.add_geometry(path)
 
         trimesh.viewer.SceneViewer(scene)
 

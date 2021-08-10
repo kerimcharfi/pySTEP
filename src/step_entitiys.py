@@ -207,7 +207,19 @@ class Edgeloop(Entity):
                 discretized.extend(reversed(edges[i].discretized[:-1]))
                 edges.pop(i)
 
-        return discretized
+        clean_poly = [discretized[0]]
+        lastpoint = discretized[0]
+
+        for i, point in enumerate(discretized[:-1], 1):
+            nextpoint = discretized[i]
+
+            if not np.allclose(point, nextpoint) and np.linalg.norm(nextpoint - lastpoint) > 0.2:
+                clean_poly.append(nextpoint)
+                lastpoint = nextpoint
+            else:
+                print("edgeloop.discretized, filtered doublicate")
+
+        return clean_poly
 
 
 class Path:
@@ -285,9 +297,11 @@ class ArcEdge(Edge):
     def __init__(self, domelement):
         super().__init__(domelement)
         self.centeraxis_dom = domelement.parents[2].parents[0].parents[1]
-        self.orientation = False
-        if domelement.data == "F":
-            self.orientation = True  # entity is a oriented edge
+        #self.orientation = False
+        if ".F." in domelement.data:
+            self.orientation = False  # entity is a oriented edge
+        else:
+            self.orientation = True
 
         self.radius = float(domelement.parents[2].data[2])
         self.base_dom = domelement.parents[2].parents[0].parents[0]  # circle/axisplacement/cart/data
@@ -296,14 +310,18 @@ class ArcEdge(Edge):
         pass
 
     def _discretize(self, num_points=3):
-        startvertex = self.carts[0]
-        endevertex = self.carts[1]
+        if self.orientation:
+            startvertex,  endevertex = self.carts[0], self.carts[1]
+        else:
+            startvertex, endevertex = self.carts[1], self.carts[0]
 
         vektorstart = startvertex - self.base_dom.entity
         vektorende = endevertex - self.base_dom.entity
         v = endevertex - startvertex
         if v == Vec([0, 0, 0]):
             v = vektorstart * (-1)
+
+
         halbierendervertex = v.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
         vviertel1 = halbierendervertex - startvertex
         viertel1vertex = vviertel1.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
