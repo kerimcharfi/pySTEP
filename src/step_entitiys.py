@@ -1,10 +1,12 @@
 from vectors import Vec
 from vectors.primitives import Gerade, Ebene
+import numpy as np
+
 
 class DOMElement:
 
     # Initializer / Instance Attributes
-    def __init__(self, id, name, parent_ids, data):
+    def __init__(self, id, name, parent_ids, data, block: str):
         self._parent_ids = parent_ids
 
         self.name = name
@@ -12,9 +14,9 @@ class DOMElement:
         self.children = []
         self.parents = []
         self.data = data
+        self.block = block
 
         self.entity = None
-
 
     def get_parent_by_name(self, name, mode):
         result = []
@@ -41,6 +43,7 @@ class DOMElement:
 
     def __repr__(self):
         return "id: #" + str(self.id) + " Name: " + str(self.name)
+
 
 class Entity:
 
@@ -69,8 +72,8 @@ class Entity:
     def __repr__(self):
         return "id: #" + str(self.id) + " Name: " + str(self.name)
 
-class Solid(Entity):
 
+class Solid(Entity):
     """
     'CLOSED_SHELL' + 'MANIFOLD_SOLID_BREP'
     """
@@ -95,7 +98,6 @@ class Solid(Entity):
 
 
 class Component(Entity):
-
     """
     'ADVANCED_BREP_SHAPE_REPRESENTATION' -> 'SHAPE_REPRESENTATION_RELATIONSHIP' -> 'SHAPE_REPRESENTATION' (enthaelt in parents 3 koordinatensysteme, darunter auch die richtige trafo ? für jeden koeper ein koord? eher 1 grundkoord aud 2koerper koords)
         (groups alle koerper)
@@ -128,7 +130,6 @@ class Component(Entity):
         self.parents_instances = []
         self.surfacemesh = []
 
-
     def __repr__(self):
         return "id: #" + str(self.id) + " COMPONENT: " + str(self.bezeichung)
 
@@ -152,7 +153,6 @@ class Component(Entity):
                 if isinstance(face, CylindricalFace):
                     self.cylinderfaces.append(face)
 
-import numpy as np
 
 class CartPoint(Vec, Entity):
 
@@ -197,7 +197,7 @@ class Edgeloop(Entity):
 
         i = 0
         while len(edges) > 0:
-            i+=1
+            i += 1
             if i >= len(edges):
                 i = 0
             if discretized[-1] == edges[i].carts[0]:
@@ -224,7 +224,6 @@ class Edgeloop(Entity):
 
 class Path:
     "multiple non closed, continous edges"
-    pass
 
     def __add__(self, other):
         if self.vertices[0] == other.vertices[0]:
@@ -236,6 +235,7 @@ class Path:
         elif self.vertices[0] == other.vertices[len(other.vertices)]:
             for vert in other.vertices:
                 self.vertices.append(vert)
+
 
 class Edge(Entity):
 
@@ -282,7 +282,6 @@ class Edge(Entity):
     def _discretize(self):
         return self.carts
 
-
     def length(self):
         length = 0
         oldvertice = self.discretized[0]
@@ -297,7 +296,7 @@ class ArcEdge(Edge):
     def __init__(self, domelement):
         super().__init__(domelement)
         self.centeraxis_dom = domelement.parents[2].parents[0].parents[1]
-        #self.orientation = False
+        # self.orientation = False
         if ".F." in domelement.data:
             self.orientation = False  # entity is a oriented edge
         else:
@@ -311,7 +310,7 @@ class ArcEdge(Edge):
 
     def _discretize(self, num_points=3):
         if self.orientation:
-            startvertex,  endevertex = self.carts[0], self.carts[1]
+            startvertex, endevertex = self.carts[0], self.carts[1]
         else:
             startvertex, endevertex = self.carts[1], self.carts[0]
 
@@ -321,7 +320,6 @@ class ArcEdge(Edge):
         if v == Vec([0, 0, 0]):
             v = vektorstart * (-1)
 
-
         halbierendervertex = v.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
         vviertel1 = halbierendervertex - startvertex
         viertel1vertex = vviertel1.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
@@ -329,10 +327,9 @@ class ArcEdge(Edge):
         viertel3vertex = vviertel3.cross(self.centeraxis_dom.entity).norm() * self.radius + self.base_dom.entity
 
         return self.tesselatesmallarc(self.base_dom.entity, startvertex, viertel1vertex, self.radius, num_points)[1:] \
-                        + self.tesselatesmallarc(self.base_dom.entity, viertel1vertex, halbierendervertex, self.radius, num_points) \
-                        + self.tesselatesmallarc(self.base_dom.entity, halbierendervertex, viertel3vertex, self.radius, num_points) \
-                        + self.tesselatesmallarc(self.base_dom.entity, viertel3vertex, endevertex, self.radius, num_points)
-
+               + self.tesselatesmallarc(self.base_dom.entity, viertel1vertex, halbierendervertex, self.radius, num_points) \
+               + self.tesselatesmallarc(self.base_dom.entity, halbierendervertex, viertel3vertex, self.radius, num_points) \
+               + self.tesselatesmallarc(self.base_dom.entity, viertel3vertex, endevertex, self.radius, num_points)
 
     def tesselatesmallarc(self, base, startvertex, endevertex, radius, resolution):
         edges = []
@@ -424,7 +421,9 @@ class EllipseEdge(Edge):
         msp.add_polyline3d(points)
         self.centeraxis.draw_to_msp(msp)
 
+
 import trimesh.path.curve
+
 
 class SplineEdge(Edge):
 
@@ -437,22 +436,14 @@ class SplineEdge(Edge):
     def knots(self):
         return [dom_knot.entity for dom_knot in self.knots_dom]
 
-    def _discretize(self, num_points= 80):
+    def _discretize(self, num_points=80):
         return list(trimesh.path.curve.discretize_bspline(self.knots, self.controls, num_points))
 
 
-class Line(Edge, Gerade):
+class Line(Edge):
 
     def __init__(self, domelement):
         Edge.__init__(self, domelement)
-
-        # self.richtung = self.carts[1] - self.carts[0]
-        #
-        # Gerade.__init__(self, stutze=self.carts[0], richtung=self.richtung)
-
-
-    def __str__(self):
-        return "LINE" + str(self.vertices[0]) + str(self.vertices[1])
 
 
 class Face(Entity):  # advanced face
@@ -461,46 +452,27 @@ class Face(Entity):  # advanced face
 
         self.connectingedge = None
 
-        self.outerbound_dom = domelement.parents[0].parents[0] # outboundid
+        self.outerbound_dom = domelement.parents[0].parents[0]  # outboundid
         self.innerbounds_dom = []  # array of edgeloopids
         for innerbound in domelement.parents[1:-1]:
             self.innerbounds_dom.append(innerbound.parents[0])
 
         self._edges = []
-
         self._neighbours = []
-        self.connectingedges = []
-
-        # for edge in outerbound.getedges():
-        #
-        #     self.edges.append(edge.id)  ##serving dif context
-        #     self.edge_instances.append(edge)
-        #     for cart in edge.carts:
-        #         cart.appendface(self)
-        #
-        #     for faceid in edge.faces:
-        #         if not faceid == self.id:
-        #             self.neighbours.append(faceid)
-        #             self.connectingedges.append(edge.id)
-        #
-        # for edgeloop in self.getinnerbounds():
-        #     for edge in edgeloop.getedges():
-        #
-        #         self.edges.append(edge.id)
-        #         self.edge_instances.append(edge)
-        #         for cart in edge.carts:
-        #             cart.appendface(self)
-        #         for faceid in edge.faces:
-        #             if not faceid == self.id:
-        #                 self.neighbours.append(faceid)
 
     @property
     def neighbours(self):
-        neighbours = self.modelinstance.getEntitysByIDs(self.neighbours)
-        connectingedges = self.modelinstance.getEntitysByIDs(self.connectingedges)
-        for neighbour, connectingedge in zip(neighbours, connectingedges):
-            neighbour.connectingedge = connectingedge
-        return neighbours
+        """
+        gives neighbouring faces of this face as tuple (face, connecting_edge)
+        :return: [(face, connecting_edge), ]
+        """
+        if not self._neighbours:
+            for edge in self.edges:
+                for face in edge.faces:
+                    if face != self:
+                        self._neighbours.append((face, edge))
+
+        return self._neighbours
 
     @property
     def edge_loops(self):
@@ -535,48 +507,23 @@ class PlaneFace(Face, Ebene):
 
         self.normal_dom = plane2[1]
 
-        Ebene.__init__(self, Vec(np.array(self.base_dom.data[1],dtype=float)), Vec(np.array(self.normal_dom.data[1],dtype=float)))
+        Ebene.__init__(self, Vec(np.array(self.base_dom.data[1], dtype=float)), Vec(np.array(self.normal_dom.data[1], dtype=float)))
 
     @property
     def normal(self):
         return self.normal_dom.entity
 
-    def __str__(self):
-        return "planeface: " + str(self.plane)
-
-    def tesselate(self, mode):
-        if mode == "vertex":
-            vertices = []
-            for edgeloop in self.edgeloops:
-                for edge in edgeloop:
-                    vertices.append(edge.tesselate(20, mode))
-            return vertices
-        if mode == "polygon":
-            vertices = []
-            for edgeloop in self.edgeloops:
-                subvertices = []
-                for edge in edgeloop:
-                    subvertices.append(edge.tesselate(20, "vertex"))
-                vertices.append(subvertices)
-                del subvertices
-            return vertices
-        else:
-            return None
-
-    def paralleltoplane(self, plane):
-        pass
-
     def rotatetoxy(self):
-        zaxis = Vektor([0, 0, 1])
-        nv = self.nv_instance
+        zaxis = Vec([0, 0, 1])
+        nv = self.normal
         angle = (-nv).angle(zaxis)
         rotaxis = nv.cross(zaxis).norm()
         result = []
 
-        for edge in self.edge_instances:
+        for edge in self.edges:
             edgeverts = []
             for vert in edge.vertices:
-                edgeverts.append(vert.rotate_copy_around_axis(Gerade(Vektor([0, 0, 0]), rotaxis), angle))
+                edgeverts.append(vert.rotate_copy_around_axis(Gerade(Vec([0, 0, 0]), rotaxis), angle))
             result.append(edgeverts)
 
         return result
@@ -613,90 +560,6 @@ class CylindricalFace(Face):
         print(str(plane) + " is not tangetial to: " + str(self))
         return False
 
-    @property
-    def area(self):
-        if self.area == 0:
-            self.triangulate()
-        else:
-            return self.areavalue
-
-    def triangulate(self):
-        RESOLUTION = 72
-
-        def project_to_xy(vert):
-            verbindung = self.base - vert
-            y_koordinate = verbindung * self.mainaxis.richtung.norm()
-            y_vektor = y_koordinate * self.mainaxis.richtung.norm()
-            r_vektor = verbindung - y_vektor
-            winkel = self.secondaxis.richtung.angle(r_vektor)
-            x_koordinate = winkel * self.radius
-            projeziert_vektor = Vektor(x=x_koordinate, y=y_koordinate)
-            projeziert_vektor.original = vert
-            return projeziert_vektor
-
-        def project_back(vert):
-            if vert.original:
-                return vert.original
-            x = vert.x
-            winkel = x / self.radius
-            y = vert.y
-            return self.base + y * self.mainaxis.richtung.norm() + self.secondaxis.richtung.norm().rotate_copy_around_axis(
-                Gerade(Vektor([0, 0, 0]), self.mainaxis.richtung),
-                winkel
-            )
-
-        # projeziere alle Linien auf xy Ebene
-
-        projezierteverts = [project_to_xy(vert) for vert in self.vertices]
-
-        # Trianguliere das Projezierte Bild
-
-        projectedtriangles = []
-
-        # Teile die projezierten Dreiecke um die Zylinderform zu erhalten
-
-        for i in range(RESOLUTION):
-            phi = i / 2 * math.pi
-            x = phi * self.radius
-            splitterline = Linesegment(Vektor(x, -10000), Vektor(x, 10000))
-
-            for triangle in projectedtriangles:
-                triangle.split(splitterline)
-
-        # move to triangle object
-        class Triangle:
-            def __init__(self, point1, point2, point3):
-
-                self.points = [point1, point2, point3]
-                self.linesegments = [Linesegment(point1, point2), Linesegment(point2, point3), Linesegment(point3, point1)]
-
-            def split(self, splitterline):
-
-                intersections = []
-                polygon = []
-                for linesegment in self.linesegments:
-                    polygon.extend(linesegment.start)
-                    intersection = linesegment.intersect(splitterline)
-                    if intersection:
-                        polygon.extend(intersection)
-
-                # triangles = earcut.earcut(polygon)
-                triangles = [(polygon[index * 2], polygon[index * 2 + 1]) for index in earcut.earcut(polygon)]
-                return triangles
-
-                ## Fallunterscheidung:
-                # 1. splitter trifft nur einen Punkt
-                # 2. splitter liegt auf einem Liniensegment
-                # 3. splitter trifft einen Punkt und schneidet eine Linie
-                # 4. splitter schneidet zwei Linien
-
-        # Tranformation zurück
-
-        mesh = [project_back(vert) for vert in projectedtriangles]
-
-        self.areavalue = 0
-        self.mesh = mesh
-
 
 class ConeFace(Face):
     def __init__(self, entity, Modelinstance):
@@ -709,21 +572,6 @@ class ConeFace(Face):
         self.secondaxis = cylinder.getParents(0).getParents(2)
         self.faceboundedges = self.getParents(0).getParents(0).getParents()
         self.areavalue = 0  # to do extract lines,  actually OUTDATED ? difference between getedges of super ?
-
-    def triangulate(self):
-        projeziert = []
-
-        def project_to_xy(vert):
-            verbindung = self.base - vert
-            y_koordinate = verbindung * self.mainaxis.richtung.norm()
-            y_vektor = y_koordinate * self.mainaxis.richtung.norm()
-            r_vektor = verbindung - y_vektor
-            winkel = self.secondaxis.richtung.angle(r_vektor)
-            x_koordinate = winkel * self.radius
-            projeziert.append(Vektor(x=x_koordinate, y=y_koordinate))
-
-        for vert in self.vertices:
-            project_to_xy(vert)
 
 
 class Linesegment():

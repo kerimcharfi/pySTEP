@@ -92,17 +92,26 @@ def find_profile(solid):
 
     for face in solid.plane_faces:
         face_normal_edges = []
+
+        # Für jeden Eckpunkt
         for vert in face.carts:
-            for edge in vert.edges:
+
+            if len(vert.edges) > 2:
+                # get edge that is not part of the face
+                edge = [edge for edge in vert.edges if edge not in face.edges][0]
+
+                # get edge_direction in point
                 if edge.discretized[0] == vert:
                     direction = edge.discretized[0] - Vec(edge.discretized[1])
                 else:
                     direction = Vec(edge.discretized[-2]) - edge.discretized[-1]
-                if Vec(direction).isparallelto(face.normal):
+
+                # check if edge is normal to face
+                if Vec(direction).angle(face.normal) < np.deg2rad(10) or Vec(direction).angle(-face.normal) < np.deg2rad(10):
                     face_normal_edges.append(edge)
+                else:
                     break
-            else:
-                break
+
         else:
             profil_flachen.append(face)
             normal_edges.append(face_normal_edges)
@@ -112,25 +121,28 @@ def find_profile(solid):
     return profil_flachen, normal_edges
 
 
-def find_middle_line(polylines):
+def find_middle_line(boundary_polyline, intersection_polylines, target_num_segments, first_pml_point):
     pml = []
-
-    # max abstand von pml
-
+    extended_polylines = []
     ## verlängerung, sodass schnittpunkte gewährleistet sind
-    for i, pl in enumerate(polylines[:-1]):
-        polylines[i] = [Vec(pl[0] - pl[1]).norm(10) + pl[0], *pl, Vec(pl[-1] - pl[-2]).norm(10) + pl[-1]]
-    # -------
+    for polyline in intersection_polylines:
+        extended_polylines.append([Vec(polyline[0] - polyline[1]).norm(10) + polyline[0], *polyline, Vec(polyline[-1] - polyline[-2]).norm(10) + polyline[-1]])
 
-    pl = list(polylines[-1])
-    for i in range(len(pl)):
-        if i == len(pl) - 1:
-            p1, p2 = pl[i], pl[i - 1]
+    extended_boundary_polyline = [Vec(boundary_polyline[0] - boundary_polyline[1]).norm(10) + boundary_polyline[0], *boundary_polyline,
+                                  Vec(boundary_polyline[-1] - boundary_polyline[-2]).norm(10) + boundary_polyline[-1]]
+    # ------------------------------------------------------
+
+    # eine der äußeren Profillininen:
+    pbl = simplify_line(list(boundary_polyline), target_num_segments)
+
+    for i in range(len(pbl)):
+        if i == len(pbl) - 1:
+            p1, p2 = pbl[i], pbl[i - 1]
         else:
-            p1, p2 = pl[i], pl[i + 1]
+            p1, p2 = pbl[i], pbl[i + 1]
 
         intersection_points = []
-        for polyline in polylines[:-1]:
+        for polyline in extended_polylines:
             segments = [[], []]
             for k in range(len(polyline) - 1):
                 segments[0].append(polyline[k])
@@ -151,10 +163,10 @@ def find_middle_line(polylines):
             else:
                 print("warning: no intersection found")
 
-        intersection_points.append(p1)
-
-        if len(intersection_points) != len(polylines):
+        if len(intersection_points) != len(intersection_polylines):
             print("unregelmäßigkeit in anzahl der schnittpunkte")
+
+        intersection_points.append(p1)
 
         new_pml_point = np.array([0, 0, 0], dtype=float)
 
@@ -162,7 +174,39 @@ def find_middle_line(polylines):
             new_pml_point += intersection * (1 / len(intersection_points))
 
         pml.append(new_pml_point)
-    return pml
+
+    aligned_pbl = []
+    pml = [first_pml_point, *pml[1:]]
+
+    for i in range(len(pml)):
+        if i == len(pml) - 1:
+            p1, p2 = pml[i], pml[i - 1]
+        else:
+            p1, p2 = pml[i], pml[i + 1]
+
+        polyline = extended_boundary_polyline
+
+        segments = [[], []]
+        for k in range(len(polyline) - 1):
+            segments[0].append(polyline[k])
+            segments[1].append(polyline[k + 1])
+
+        pts, v = trimesh.intersections.plane_lines(p1, p2 - p1, segments)
+
+        ## nur den schnittpunkt mit der kleinsten entfernung nutzen
+        if len(pts) > 0:
+            min_dist = np.linalg.norm(pts[0] - p1)
+            min_point = pts[0]
+            for p in pts:
+                if np.linalg.norm(p - p1) < min_dist:
+                    min_point = p
+                    min_dist = np.linalg.norm(p - p1)
+
+            aligned_pbl.append(min_point)
+        else:
+            print("warning: no intersection found")
+
+    return pml, aligned_pbl
 
 
 def simplify_line(polyline, target_num_segments):
@@ -189,9 +233,65 @@ def simplify_line(polyline, target_num_segments):
         index = smallest_segment[1]
         if index == 0:
             polyline.pop(index + 1)
-        elif index < len(polyline)-2 and np.linalg.norm(polyline[index + 1] - polyline[index + 2]) < np.linalg.norm(polyline[index-1] - polyline[index]):
+        elif index < len(polyline) - 2 and np.linalg.norm(polyline[index + 1] - polyline[index + 2]) < np.linalg.norm(polyline[index - 1] - polyline[index]):
             polyline.pop(index + 1)
         else:
             polyline.pop(smallest_segment[1])
 
     return polyline
+
+
+def decompose_wire(solid):
+    # Profilfläche und Startkanten für Polylines
+    profil_flachen, pl_seeds = find_profile(solid)
+
+    # untere profilfläche durch z koordinate identifizieren
+    if profil_flachen[0].sv.z < profil_flachen[1].sv.z:
+        lowerplaneface = profil_flachen[0]
+        pl_seeds = pl_seeds[0]
+    else:
+        lowerplaneface = profil_flachen[1]
+        pl_seeds = pl_seeds[1]
+
+    # mittelpunkt des profils durch zentroidmethode
+    base_point_pml = np.array([0, 0, 0])
+    num_points = len(lowerplaneface.carts)
+    for point in lowerplaneface.carts:
+        base_point_pml = base_point_pml + point * (1 / num_points)
+
+    # Polylines aus den Kanten aufbauen
+    polylines = []
+    for pl_seed in pl_seeds:
+        polylines.append(expand_path(pl_seed))
+
+    base_point_pbl = polylines[0][0]
+
+    # po
+    pml, pbl = find_middle_line(polylines[0], polylines[1:], 15, base_point_pml)
+
+
+
+    # pml[0] = base_point_pml
+    # pbl[0] = base_point_pbl
+    pml = [base_point_pml, *pml]
+    pbl = [base_point_pbl, *pbl]
+
+    profil = lowerplaneface.outerbound
+    translation = pml[0]
+
+    return {
+        "wire_id": solid.bezeichnung.replace('\\', ''),
+        "base_pose": [
+            (translation / 100).tolist(),
+            [0, 0, 0, 1]
+        ],
+        "type": "wire",
+        "seg_lengths": [np.linalg.norm(pml[i] - pml[i + 1]) for i in range(len(pml) - 1)],
+        "mittel_profillinie": [list(point - translation) for point in pml],
+        "rand_profillinie": [list(point - translation) for point in pbl],
+        "profil": {
+            "type": "polygon",
+            "points": [list(cart - translation) for cart in profil.discretized]
+        },
+        "polylines": polylines
+    }

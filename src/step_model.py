@@ -26,7 +26,7 @@ class Model:
 
         self.idcounter = 0
 
-        #blocks = re.findall(r'([\S\s]+?);', document)
+        # blocks = re.findall(r'([\S\s]+?);', document)
         blocks = document.replace('\n', '').split(";")
         data_section = False
 
@@ -47,7 +47,7 @@ class Model:
                 current_stream_is_string = False
 
                 for char in b:
-                    if "(" == char or (char == "'" and bracket_stack[-1]!="'"):
+                    if "(" == char or (char == "'" and bracket_stack[-1] != "'"):
                         if stream:
                             container_stack[-1].append(stream)
                             stream = ''
@@ -56,7 +56,7 @@ class Model:
                         container_stack[-1].append(newcontainer)
                         container_stack.append(newcontainer)
 
-                    elif ")" == char and bracket_stack[-1] == "(" or (char == "'" and bracket_stack[-1]=="'"):
+                    elif ")" == char and bracket_stack[-1] == "(" or (char == "'" and bracket_stack[-1] == "'"):
                         if stream:
                             container_stack[-1].append(stream)
                             stream = ''
@@ -76,8 +76,6 @@ class Model:
                     if stream:
                         container_stack[-1].append(stream)
 
-
-
                 all_ids_in_b = re.findall('#(\d+)', b)
 
                 if all_ids_in_b:
@@ -87,18 +85,14 @@ class Model:
                     parent_ids = [int(id_str) for id_str in all_ids_in_b]
                     name = re.findall(r'=(\w+)|$', id_and_name_block)[0]
 
-                    self.DOM.append(DOMElement(id, name, parent_ids, data))
+                    self.DOM.append(DOMElement(id, name, parent_ids, data, b))
 
-
-        # if len(self.entitys) > 0:
-        #     self.entitys[len(self.entitys) - 1].block = b
 
         ### link DOM elements
         self.idoffset = int(self.DOM[0].id)
 
         for domelement in self.DOM:
             for parent_id in domelement._parent_ids:
-
                 domelement.parents.append(self.get_dom_elem_by_id(parent_id))
                 self.get_dom_elem_by_id(parent_id).children.append(domelement)
 
@@ -138,19 +132,6 @@ class Model:
 
             elif domelement.name == "EDGE_CURVE":
 
-                # #reparenting of substituted special_type
-                # newedge = self.entitys[i]
-                # id = newedge.id
-                # for parent in newedge.parents:
-                #     for i in range(len(parent.children)):
-                #         if parent.children[i].id == id:
-                #             parent.children[i] = newedge
-                #
-                # for child in newedge.children:
-                #     for i in range(len(child.parents)):
-                #         if child.parents[i].id == id:
-                #             child.parents[i] = newedge
-
                 if domelement.parents[2].name == "LINE":
 
                     self.entitys.append(Line(domelement))
@@ -184,7 +165,7 @@ class Model:
                         for c, rep in zip(control_raw, repeats):
                             for xxxx in range(rep):
                                 control.append(c)
-                        self.entitys.append(SplineEdge( domelement, control))
+                        self.entitys.append(SplineEdge(domelement, control))
 
             elif domelement.name == "EDGE_LOOP":
                 self.entitys.append(Edgeloop(domelement))
@@ -193,7 +174,7 @@ class Model:
                 coords = (Vec(np.array(domelement.parents[0].data[1], dtype=float)) * float(domelement.data[2])).koordinaten
                 self.entitys.append(CartPoint(domelement, coords))
 
-            elif domelement.name== "VERTEX_POINT":
+            elif domelement.name == "VERTEX_POINT":
 
                 vertex = domelement
                 cart = vertex.parents[0]
@@ -209,7 +190,7 @@ class Model:
             else:
                 pass
 
-                #insert basic entity ? self.entitys.append(Entity(id, name, parents, data, self))
+                # insert basic entity ? self.entitys.append(Entity(id, name, parents, data, self))
 
         for domelement in assembly_connections:
             parent = domelement.parents[0].entity
@@ -219,7 +200,6 @@ class Model:
 
         for component in self.components:
             component.complete__init__()
-
 
         print("Model loaded")
 
