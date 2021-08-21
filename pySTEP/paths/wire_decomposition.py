@@ -269,15 +269,13 @@ def decompose_wire(solid):
     # po
     pml, pbl = find_middle_line(polylines[0], polylines[1:], 15, base_point_pml)
 
-
-
-    # pml[0] = base_point_pml
-    # pbl[0] = base_point_pbl
-    pml = [base_point_pml, *pml]
-    pbl = [base_point_pbl, *pbl]
-
     profil = lowerplaneface.outerbound
     translation = pml[0]
+
+    z = Vec([0, 0, 1])
+    x = Vec(base_point_pml) - Vec(base_point_pbl)
+    y = z.cross(x).norm()
+    base_kos = [x.norm().koordinaten, y.norm().koordinaten, z.norm().koordinaten]
 
     return {
         "wire_id": solid.bezeichnung.replace('\\', ''),
@@ -285,6 +283,7 @@ def decompose_wire(solid):
             (translation / 100).tolist(),
             [0, 0, 0, 1]
         ],
+        "base_kos": base_kos,
         "type": "wire",
         "seg_lengths": [np.linalg.norm(pml[i] - pml[i + 1]) for i in range(len(pml) - 1)],
         "mittel_profillinie": [list(point - translation) for point in pml],
