@@ -1,7 +1,6 @@
 import unittest
 import trimesh.viewer
-
-from src.step_model import Model
+from pySTEP.step_model import Model
 
 class TestCase(unittest.TestCase):
     def test_parsing(self):

@@ -1,5 +1,5 @@
 import re
-from src.step_entitiys import *
+from pySTEP.step_entitiys import *
 import pathlib
 import typing
 

@@ -76,10 +76,6 @@ class MyTestCase(unittest.TestCase):
 
         trimesh.viewer.SceneViewer(scene)
 
-        ## Zentroid methode
-
-        print(model)
-
 
 if __name__ == '__main__':
     unittest.main()
