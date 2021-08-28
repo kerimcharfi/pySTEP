@@ -280,7 +280,7 @@ def decompose_wire(solid):
     return {
         "wire_id": solid.bezeichnung.replace('\\', ''),
         "base_pose": [
-            (translation / 100).tolist(),
+            [list(direction) for direction in (translation / 100)],
             [0, 0, 0, 1]
         ],
         "base_kos": base_kos,
