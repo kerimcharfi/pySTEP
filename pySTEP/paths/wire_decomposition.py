@@ -280,10 +280,10 @@ def decompose_wire(solid):
     return {
         "wire_id": solid.bezeichnung.replace('\\', ''),
         "base_pose": [
-            [list(direction) for direction in (translation / 100)],
+            (translation / 100).tolist(),
             [0, 0, 0, 1]
         ],
-        "base_kos": base_kos,
+        "base_kos": [list(direction) for direction in base_kos],
         "type": "Wire",
         "seg_lengths": [np.linalg.norm(pml[i] - pml[i + 1]) for i in range(len(pml) - 1)],
         "poly_middle_line": [list(point - translation) for point in pml],

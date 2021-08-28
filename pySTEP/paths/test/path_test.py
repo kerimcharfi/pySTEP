@@ -1,5 +1,5 @@
 import unittest
-from step_model import Model
+from pySTEP.step_model import Model
 
 import trimesh
 import trimesh.intersections
@@ -12,7 +12,7 @@ import time
 import json
 from vectors import Vec
 
-from paths.wire_decomposition import *
+from pySTEP.paths.wire_decomposition import *
 
 
 
