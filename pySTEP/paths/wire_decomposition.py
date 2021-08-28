@@ -292,5 +292,5 @@ def decompose_wire(solid):
             "type": "polygon",
             "points": [list(cart - translation) for cart in profil.discretized]
         },
-        "polylines": polylines
+        "polylines":  [[list(point) for point in polyline] for polyline in polylines]
     }
