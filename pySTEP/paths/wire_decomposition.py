@@ -284,10 +284,10 @@ def decompose_wire(solid):
             [0, 0, 0, 1]
         ],
         "base_kos": base_kos,
-        "type": "wire",
+        "type": "Wire",
         "seg_lengths": [np.linalg.norm(pml[i] - pml[i + 1]) for i in range(len(pml) - 1)],
-        "mittel_profillinie": [list(point - translation) for point in pml],
-        "rand_profillinie": [list(point - translation) for point in pbl],
+        "poly_middle_line": [list(point - translation) for point in pml],
+        "orientation_points": [list(point - translation) for point in pbl],
         "profil": {
             "type": "polygon",
             "points": [list(cart - translation) for cart in profil.discretized]
