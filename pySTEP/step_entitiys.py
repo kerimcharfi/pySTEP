@@ -286,7 +286,7 @@ class Edge(Entity):
         length = 0
         oldvertice = self.discretized[0]
         for vertice in self.discretized[1:]:
-            length += abs(oldvertice - vertice)
+            length += np.linalg.norm(oldvertice - vertice)
             oldvertice = vertice
         return round(length, 10)
 

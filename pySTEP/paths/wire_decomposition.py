@@ -116,6 +116,18 @@ def find_profile(solid):
             profil_flachen.append(face)
             normal_edges.append(face_normal_edges)
 
+    if len(profil_flachen) > 2:
+        faces = []
+
+        for face in profil_flachen:
+            length = 0
+            for edge in face.edges:
+                length += edge.length()
+            faces.append((face, length))
+
+        faces.sort(key=lambda face: face[1])
+
+        profil_flachen = [faces[0][0], faces[1][0]]
     assert len(profil_flachen) < 3
 
     return profil_flachen, normal_edges
