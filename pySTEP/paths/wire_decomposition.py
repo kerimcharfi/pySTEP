@@ -81,7 +81,8 @@ def expand_path(seed_edge):
         if not np.allclose(point, nextpoint):
             clean_poly.append(nextpoint)
         else:
-            print("filtered doublicate")
+            #print("filtered doublicate")
+            pass
 
     return clean_poly
 
