@@ -1,1 +1,0 @@
-from .wire_decomposition import decompose_wire
