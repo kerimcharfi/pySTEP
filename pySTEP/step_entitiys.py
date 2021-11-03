@@ -217,7 +217,8 @@ class Edgeloop(Entity):
                 clean_poly.append(nextpoint)
                 lastpoint = nextpoint
             else:
-                print("edgeloop.discretized, filtered doublicate")
+                #print("edgeloop.discretized, filtered doublicate")
+                pass
 
         return clean_poly
 
